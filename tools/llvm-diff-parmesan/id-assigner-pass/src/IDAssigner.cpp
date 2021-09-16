@@ -148,8 +148,8 @@ bool IDAssigner::runOnModule(Module &M) {
   IdentifierGenerator = make_unique<IDGenerator>();
 
 
-  std::set<IDAssigner::IdentifierType> cmpBbSet;
   for (auto &F : M) {
+    std::set<IDAssigner::IdentifierType> cmpBbSet;
     IdMap[&F] = IdentifierGenerator->getUniqueIdentifier();
     for (Value &Arg : F.args()) {
       IdMap[&Arg] = IdentifierGenerator->getUniqueIdentifier();
