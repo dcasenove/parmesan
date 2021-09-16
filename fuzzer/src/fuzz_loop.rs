@@ -76,19 +76,19 @@ pub fn fuzz_loop(
 
         {
             let fuzz_type = cond.get_fuzz_type();
-            if cond.is_target {
+            if cond.is_target && cmd_opt.sanopt_bin.is_some() {
                 info!("Using Sanopt Executor");
             } else {
                 info!("Using normal Executor");
             }
-            let mut cur_executor = if cond.is_target {&mut sanitized_executor} else {&mut executor};
+            let mut cur_executor = if cond.is_target && cmd_opt.sanopt_bin.is_some() {&mut sanitized_executor} else {&mut executor};
 
             match fuzz_type {
                 FuzzType::ExploreFuzz => {
                     // Avoid sanitized binary when exploring
                 },
                  _ => {
-                    cur_executor = &mut sanitized_executor;
+                    cur_executor = if cmd_opt.sanopt_bin.is_some() {&mut sanitized_executor} else {&mut executor};
                 },
             }
             
