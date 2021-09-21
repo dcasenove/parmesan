@@ -112,12 +112,7 @@ void IDAssigner::collectCallSiteDominators(Function *F) {
               if (CI->getCalledFunction() == NULL) {
                   SmallPtrSet<Instruction *, 16> BranchSet;
                   SmallPtrSet<Instruction *, 16> Seen;
-                  if (CI->getNumArgOperands() < 1)
-                      continue;
-                  auto ArgI = CI->getArgOperand(0);
-                  if (!ArgI)
-                      continue;
-                  Instruction *Inst = dyn_cast<Instruction>(ArgI);
+                  Instruction *Inst = dyn_cast<Instruction>(CI->getCalledValue());
                   if (!Inst)
                       continue;
                   collectPreviousIndirectBranch(Inst, &BranchSet, &Seen);
