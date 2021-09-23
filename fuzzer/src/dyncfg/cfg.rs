@@ -8,8 +8,9 @@ use angora_common::tag::TagSeg;
 use super::fparse::CfgFile;
 
 pub type CmpId = u32;
+pub type BbId = u32;
 pub type CallSiteId = u32;
-pub type Edge = (CmpId, CmpId);
+pub type Edge = (BbId, BbId);
 pub type Score = u32;
 pub type FixedBytes = Vec<(usize, u8)>;
 
@@ -19,8 +20,9 @@ const UNDEF_SCORE: Score = std::u32::MAX;
 
 #[derive(Clone)]
 pub struct ControlFlowGraph {
-    graph: DiGraphMap<CmpId, Score>,
+    graph: DiGraphMap<BbId, Score>,
     targets: HashSet<CmpId>,
+    id_mapping: HashMap<BbId, Vec<CmpId>>,
     solved_targets: HashSet<CmpId>,
     indirect_edges: HashSet<Edge>,
     callsite_edges: HashMap<CallSiteId, HashSet<Edge>>,
@@ -42,6 +44,7 @@ impl ControlFlowGraph {
         let mut result = ControlFlowGraph {
             graph: DiGraphMap::new(),
             targets: data.targets,
+            id_mapping: data.id_mapping,
             solved_targets: HashSet::new(),
             indirect_edges: HashSet::new(),
             callsite_edges: HashMap::new(),
@@ -55,6 +58,23 @@ impl ControlFlowGraph {
         }
 
         info!("INIT CFG: dominators: {:?}", result.dominator_cmps);
+        info!("INIT ID mapping: {:?}", result.id_mapping);
+
+        result
+    }
+
+    pub fn empty_new() -> ControlFlowGraph {
+        let result = ControlFlowGraph {
+            graph: DiGraphMap::new(),
+            targets: HashSet::new(),
+            id_mapping: HashMap::new(),
+            solved_targets: HashSet::new(),
+            indirect_edges: HashSet::new(),
+            callsite_edges: HashMap::new(),
+            callsite_dominators: HashMap::new(),
+            dominator_cmps: HashSet::new(),
+            magic_bytes: HashMap::new(),
+        };
 
         result
     }
@@ -141,6 +161,8 @@ impl ControlFlowGraph {
         }
 
         self.graph.add_edge(src, dst, dst_score);
+        #[cfg(test)]
+        println!("NEW SCORE for {:?}->{:?}: {:?}", src, dst, dst_score);
         self.propagate_score(src);
     }
 
@@ -160,6 +182,8 @@ impl ControlFlowGraph {
                 }
             }
             for p in predecessors {
+                #[cfg(test)]
+                println!("NEW SCORE IN PREDECESSOR {:?}: {:?}", p, new_score);
                 self.graph.add_edge(p, visited, new_score);
             }
         }
@@ -240,26 +264,33 @@ impl ControlFlowGraph {
         score
     }
 
-    fn _score_for_cmp(&self, cmp: CmpId) -> Score {
-        self._score_for_cmp_inp(cmp, vec![])
+    fn _score_for_cmp(&self, bb: BbId) -> Score {
+        self._score_for_cmp_inp(bb, vec![])
     }
 
-    fn _score_for_cmp_inp(&self, cmp: CmpId, inp: Vec<u8>) -> Score {
-        if self.targets.contains(&cmp) {
-            debug!("Calculate score for target: {}", cmp);
-            return TARGET_SCORE;
+    fn _score_for_cmp_inp(&self, bb: BbId, inp: Vec<u8>) -> Score {
+        // Get the cmpid of the bbid if there is one
+        if !self.id_mapping.is_empty() {
+            let cmpid_vec = &self.id_mapping[&bb];
+            if !cmpid_vec.is_empty() {
+                let cmp = cmpid_vec[0];
+                if self.targets.contains(&cmp) {
+                    debug!("Calculate score for target: {}", cmp);
+                    return TARGET_SCORE;
+                }
+            }
         }
-        let mut neighbors = self.graph.neighbors_directed(cmp, Outgoing);
+        let mut neighbors = self.graph.neighbors_directed(bb, Outgoing);
 
         let mut scores = vec![];
         while let Some(n) = neighbors.next() {
-            let edge = (cmp, n);
+            let edge = (bb, n);
             if !self._should_count_edge(edge, &inp) {
                 debug!("Skipping count edge: {:?}", edge);
                 continue;
             }
             debug!("Counting edge: {:?}", edge);
-            if let Some(s) = self.graph.edge_weight(cmp, n) {
+            if let Some(s) = self.graph.edge_weight(bb, n) {
                 scores.push(*s);
             }
         }
@@ -293,19 +324,52 @@ impl ControlFlowGraph {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::iter::FromIterator;
+
+    fn test_new(targets: HashSet<CmpId>, id_mapping: HashMap<BbId, Vec<CmpId>>) -> ControlFlowGraph {
+        let result = ControlFlowGraph {
+            graph: DiGraphMap::new(),
+            targets: targets,
+            id_mapping: id_mapping,
+            solved_targets: HashSet::new(),
+            indirect_edges: HashSet::new(),
+            callsite_edges: HashMap::new(),
+            callsite_dominators: HashMap::new(),
+            dominator_cmps: HashSet::new(),
+            magic_bytes: HashMap::new(),
+        };
+
+        result
+    }
 
     #[test]
     fn cfg_basic() {
         // Create CFG
-        let targets = HashSet::new();
-        let mut cfg = ControlFlowGraph::new(targets);
+        let mut cfg = ControlFlowGraph::empty_new();
         let edges = vec![(10,20), (20,30), (10,40), (40,50), (20,30)];
 
-       for e in edges.clone() {
+        for e in edges.clone() {
             cfg.add_edge(e);
         }
-
     }
     
+    #[test]
+    fn cfg_target_mapping() {
+        // Create CFG
+        let target_vec = vec![1100, 1200];
+        let targets = HashSet::from_iter(target_vec.iter().cloned());
+
+        let id_mapping: HashMap<BbId, Vec<CmpId>> = [(10, vec![1000]), (20, vec![]), (30, vec![1100]), (40, vec![]), (50, vec![1200])].iter().cloned().collect();
+
+        let mut cfg = test_new(targets, id_mapping);
+        let edges = vec![(10, 20), (20,30), (10,40), (40,50), (20,30)];
+
+        println!("TARGETS: {:?}", cfg.targets);
+        println!("ID_MAPPING: {:?}", cfg.id_mapping);
+        // Test adding BBId edges
+        for e in edges.clone() {
+            cfg.add_edge(e);
+        }
+    }
 }
 
