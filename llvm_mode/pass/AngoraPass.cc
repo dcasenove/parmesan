@@ -17,7 +17,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-
+#include <tuple>
+#include <set>
+#include "llvm/Analysis/TargetLibraryInfo.h"
+#include "llvm/Support/raw_ostream.h"
+#include <bits/stdc++.h>
 #include "./abilist.h"
 #include "./defs.h"
 #include "./debug.h"
@@ -67,6 +71,8 @@ public:
   unsigned int inst_ratio = 100;
   llvm::ValueMap<const llvm::Value *, u32> IdMap;
 
+  std::set<std::tuple<BasicBlock *, BasicBlock *>> CfgEdges;
+  std::map<BasicBlock *, u32 > EdgesId;
   // Const Variables
   DenseSet<u32> UniqCidSet;
 
@@ -151,6 +157,7 @@ public:
   void collectPreviousIndirectBranch(Instruction *Inst, SmallPtrSet<Instruction *, 16> *);
   void resetIndirectCallContext(IRBuilder<> *IRB);
   void assignBasicBlockId(BasicBlock &BB);
+  void printCFG(raw_ostream &);
 };
 
 } // namespace
@@ -427,6 +434,7 @@ void AngoraLLVMPass::countEdge(Module &M, BasicBlock &BB) {
 
   // LLVMContext &C = M.getContext();
   unsigned int cur_loc = getRandomBasicBlockId();
+  EdgesId[&BB] = cur_loc;
   ConstantInt *CurLoc = ConstantInt::get(Int32Ty, cur_loc);
 
   BasicBlock::iterator IP = BB.getFirstInsertionPt();
@@ -510,6 +518,7 @@ void AngoraLLVMPass::addFnWrap(Function &F) {
 
   if(FastMode) {
     unsigned int cur_loc = getRandomBasicBlockId();
+    EdgesId[BB] = cur_loc;
     ConstantInt *CurLoc = ConstantInt::get(Int32Ty, cur_loc);
     CallInst *IDLog = IRB.CreateCall(TraceBB, {CurLoc});
     setInsNonSan(IDLog);
@@ -611,6 +620,17 @@ void AngoraLLVMPass::visitCallInst(Instruction *Inst) {
       Caller->eraseFromParent();
     }
     return;
+  }
+
+  if(FastMode) {
+    // Build inter function CFG
+    const TargetLibraryInfoImpl *TLI;
+    LibFunc lib_func;
+    if (Callee && !TLI->getLibFunc(Callee->getName(), lib_func)) {
+        BasicBlock *src = Caller->getParent();
+        BasicBlock *dst = &Callee->getEntryBlock();
+        CfgEdges.insert({src, dst});
+    }
   }
 
   processCall(Inst);
@@ -953,6 +973,26 @@ void AngoraLLVMPass::visitExploitation(Instruction *Inst) {
   }
 }
 
+void AngoraLLVMPass::printCFG(raw_ostream &out) {
+
+  // Map CFG BB to CFG BBIds
+  out << "\"edges\": [";
+
+  bool first = true;
+  for (auto e : CfgEdges) {
+      if (first) {
+          first = false;
+      } else {
+        out << ", ";
+      }
+      BasicBlock *src;
+      BasicBlock *dst;
+      std::tie(src,dst) = e;
+      out << "[" << EdgesId[src] << "," << EdgesId[dst] << "]";
+  }
+  out << "]\n";
+}
+
 bool AngoraLLVMPass::runOnModule(Module &M) {
 
   SAYF(cCYA "angora-llvm-pass\n");
@@ -969,6 +1009,22 @@ bool AngoraLLVMPass::runOnModule(Module &M) {
 
   if (DFSanMode)
     return true;
+
+  if (FastMode) {
+      // Build intra function CFG
+      for (auto &F : M) {
+          if (F.isDeclaration() || F.getName().startswith(StringRef("asan.module"))) {
+              continue;
+          }
+          for (auto &BB : F) {
+              const auto *TInst = BB.getTerminator();
+              for (unsigned I = 0, NSucc = TInst->getNumSuccessors(); I < NSucc; ++I) {
+                  BasicBlock *Succ = TInst->getSuccessor(I);
+                  CfgEdges.insert({&BB, Succ});
+              }
+          }
+      }
+  }
 
   for (auto &F : M) {
     if (F.isDeclaration() || F.getName().startswith(StringRef("asan.module")))
@@ -1014,6 +1070,11 @@ bool AngoraLLVMPass::runOnModule(Module &M) {
     }
   }
 
+  if(FastMode) {
+    std::error_code EC;
+    raw_fd_ostream InfoFile("edges.json", EC);
+    printCFG(InfoFile);
+  }
   if (is_bc)
     OKF("Max constraint id is %d", CidCounter);
   return true;
