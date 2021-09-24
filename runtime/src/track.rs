@@ -260,6 +260,20 @@ pub extern "C" fn __dfsw___angora_trace_exploit_val_tt(
     log_cmp_callsite(cmpid, context, last_callsite,  defs::COND_FALSE_ST, op, size, lb, 0, val, 0);
 }
 
+#[no_mangle]
+pub extern "C" fn __parmesan_trace_bb_tt(
+    _a: u32,
+) {
+   println!("In __parmesan_trace_bb_tt\n");
+}
+
+#[no_mangle]
+pub extern "C" fn __dfsw___parmesan_trace_bb_tt(
+    bbid: u32,
+) {
+  println!("In __dfsw___parmesan_trace_bb_tt\n");
+}
+
 
 #[allow(dead_code)]
 #[inline]
