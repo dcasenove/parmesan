@@ -302,7 +302,7 @@ void DiffConsumer::printStatsJson(raw_ostream &out, std::ifstream &src) {
       } else {
         out << ", ";
       }
-      out << e.first << ":" " " << e.second;
+      out << "\"" << e.first << "\"" << ": " << e.second;
   }
   out << "},\n";
 
