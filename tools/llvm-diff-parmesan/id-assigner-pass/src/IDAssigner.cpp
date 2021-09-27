@@ -139,24 +139,42 @@ IDAssigner::CmpIdType IDAssigner::getAngoraCmpIdForBB(BasicBlock *BB) {
     return result;
 }
 
+void IDAssigner::collectBasicBlockId(BasicBlock *BB) {
+    auto *Instr = BB->getFirstNonPHI();
+    if (CallInst *callInst = dyn_cast<CallInst>(Instr)) {
+         if (Function *calledFunction = callInst->getCalledFunction()) {
+             if (calledFunction->getName() == "__parmesan_trace_bb") {
+                 int32_t bbId = 0;
+                 auto bbIdArg = callInst->getArgOperand(0);
+                 if (ConstantInt* CI = dyn_cast<ConstantInt>(bbIdArg)) {
+                      bbId = CI->getSExtValue();
+                 }
+                 IdMap[BB] = bbId;
+             }
+        }
+    }
+}
+
 bool IDAssigner::runOnModule(Module &M) {
   IdentifierGenerator = make_unique<IDGenerator>();
 
 
   for (auto &F : M) {
-    std::set<IDAssigner::IdentifierType> cmpBbSet;
     IdMap[&F] = IdentifierGenerator->getUniqueIdentifier();
     for (Value &Arg : F.args()) {
       IdMap[&Arg] = IdentifierGenerator->getUniqueIdentifier();
     }
 
     for (auto &BB : F) {
-      IdMap[&BB] = IdentifierGenerator->getUniqueIdentifier();
+      collectBasicBlockId(&BB);
       for (auto &I : BB) {
         IdMap[&I] = IdentifierGenerator->getUniqueIdentifier();
       }
     }
+  }
 
+  for (auto &F : M) {
+    std::set<IDAssigner::IdentifierType> cmpBbSet;
     for (auto &BB : F) {
       const auto *TInst = BB.getTerminator();
       auto srcId = IdMap[&BB];
@@ -382,6 +400,16 @@ const IDAssigner::CmpsCfg IDAssigner::getCmpCfg() const {
     IdentifierType src,dst;
     std::tie(src,dst) = e;
     result.insert({rev_map[src], rev_map[dst]});
+  }
+  return result;
+}
+
+const IDAssigner::IdAngoraMap IDAssigner::getBBCmpMap() const {
+  IDAssigner::IdAngoraMap result;
+  for (auto e : CmpMap) {
+      for (auto bb: e.second) {
+          if (bb != 0) result.insert({bb, e.first});
+      }
   }
   return result;
 }

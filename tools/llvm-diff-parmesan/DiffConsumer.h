@@ -21,6 +21,7 @@
 #include "llvm/Support/raw_ostream.h"
 #include "parmesan/IDAssigner.h"
 #include <set>
+#include <fstream>
 
 namespace parmesan {};
 namespace llvm {
@@ -92,7 +93,7 @@ class StringRef;
     void logd(const DiffLogBuilder &Log) override;
     void setIdAssigner(const parmesan::IDAssigner *);
     void printStats();
-    void printStatsJson(raw_ostream &);
+    void printStatsJson(raw_ostream &, std::ifstream &);
   };
 }
 
