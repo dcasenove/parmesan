@@ -546,7 +546,9 @@ void IDAssigner::emitCfgFile(const std::string Path) const {
   for (auto e : CfgEdges) {
     IdentifierType src,dst;
     std::tie(src,dst) = e;
-    InfoFile << formatv("{0},", (uint64_t)src) << formatv("{0}", (uint64_t)dst) << "\n";
+    if (src != 0 && dst != 0) {
+        InfoFile << formatv("{0},", (uint64_t)src) << formatv("{0}", (uint64_t)dst) << "\n";
+    }
   }
 }
 
@@ -562,7 +564,9 @@ void IDAssigner::emitCmpMapFile(const std::string Path) const {
   for (const auto &Iter : CmpMap) {
       for (const auto &E: Iter.second) {
           // Note: ParmeSan expects the id as a u32, not i32
-          InfoFile << formatv("{0},", (uint32_t)Iter.first) << formatv("{0}", (uint64_t)E) << "\n";
+          if (E != 0) {
+            InfoFile << formatv("{0},", (uint32_t)Iter.first) << formatv("{0}", (uint64_t)E) << "\n";
+          }
       }
   }
 }
