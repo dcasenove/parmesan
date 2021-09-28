@@ -82,8 +82,6 @@ impl ControlFlowGraph {
 
     pub fn add_edge(&mut self, edge: Edge) -> bool {
         let result = !self.has_edge(edge);
-        #[cfg(test)]
-        println!("Handling following edge: {:?}", edge);
         self.handle_new_edge(edge);
         debug!("Added CFG edge {:?} {}", edge, self.targets.contains(&edge.1));
         result
@@ -172,18 +170,17 @@ impl ControlFlowGraph {
         }
 
         self.graph.add_edge(src, dst, dst_score);
-        // #[cfg(test)]
-        // println!("NEW SCORE for {:?}->{:?}: {:?}", src, dst, dst_score);
         self.propagate_score(src);
     }
 
 
     fn propagate_score(&mut self, bb: BbId) {
 
-        let rev_graph = Reversed(&self.graph);
+        let graph_copy = &self.graph.clone();
+        let rev_graph = Reversed(graph_copy);
         let mut visitor = Bfs::new(rev_graph, bb);
 
-        while let Some(visited) = visitor.next(&self.graph) {
+        while let Some(visited) = visitor.next(rev_graph) {
             let new_score = self._score_for_cmp(visited);
             let mut predecessors = vec![];
             {
@@ -193,13 +190,6 @@ impl ControlFlowGraph {
                 }
             }
             for p in predecessors {
-                #[cfg(test)]
-                println!("PRED (p): {:?}", p);
-                #[cfg(test)]
-                if p == 0 {
-                    println!("NEW SCORE IN EDGE {:?}->{:?}: {:?}", p, visited, new_score);
-                }
-                // let mut weight = self.graph.edge_weight_mut(p, visited);
                 self.graph.add_edge(p, visited, new_score);
             }
         }
@@ -290,8 +280,10 @@ impl ControlFlowGraph {
 
     fn _score_for_cmp_inp(&self, bb: BbId, inp: Vec<u8>) -> Score {
         // Get the cmpid of the bbid if there is one
+        let mut has_cmp = false;
         let cmp_opt = self.get_cmp_from_bb(bb);
         if let Some(cmp) = cmp_opt {
+            has_cmp = true;
             if self.targets.contains(&cmp) {
                 debug!("Calculate score for target: {}", cmp);
                 return TARGET_SCORE;
@@ -312,8 +304,11 @@ impl ControlFlowGraph {
             }
         }
         let aggregate = Self::aggregate_score(scores.clone());
-        // println!("AGGREGATE THESE SCORES ({:?}): {:?}, RESULT: {:?}", bb, scores, aggregate);
-        return aggregate;
+        if has_cmp && aggregate != UNDEF_SCORE {
+            return aggregate + 1;
+        }
+        // increase distance by one when passing a cmp
+        if has_cmp && aggregate != UNDEF_SCORE {aggregate+1} else {aggregate}
     }
 
     fn _should_count_edge(&self, edge: Edge, inp: &Vec<u8>) -> bool {
@@ -344,6 +339,7 @@ impl ControlFlowGraph {
 mod tests {
     use super::*;
     use std::iter::FromIterator;
+    use crate::itertools::Itertools;
 
     fn test_new(targets: HashSet<CmpId>, id_mapping: HashMap<BbId, CmpId>) -> ControlFlowGraph {
         let result = ControlFlowGraph {
@@ -373,7 +369,7 @@ mod tests {
     }
     
     #[test]
-    fn cfg_target_mapping() {
+    fn cfg_target_mapping_simple() {
         // Create CFG
         let target_vec = vec![1100, 1200];
         let targets = HashSet::from_iter(target_vec.iter().cloned());
@@ -382,10 +378,28 @@ mod tests {
 
         let mut cfg = test_new(targets, id_mapping);
         let edges = vec![(0,10), (10, 20), (20,30), (30,40), (40,50), (10,60), (60,70), (70,80)];
-        // let edges = vec![(0,10), (10,20)];
 
-        println!("TARGETS: {:?}", cfg.targets);
-        println!("ID_MAPPING: {:?}", cfg.id_mapping);
+        // Test adding BBId edges
+        for e in edges.clone() {
+            cfg.add_edge(e);
+        }
+        for e in edges.clone() {
+            let (from, to) = e;
+            println!("weight for ({:?}, {:?}): {:?}", from, to, cfg.graph.edge_weight(from, to))
+        }
+    }
+
+    #[test]
+    fn cfg_target_mapping_complex() {
+        // Create CFG
+        let target_vec = vec![1700];
+        let targets = HashSet::from_iter(target_vec.iter().cloned());
+
+        let id_mapping: HashMap<BbId, CmpId> = [(10, 1000), (20, 1100), (50, 1200), (60, 1300), (140,1400), (160,1500), (100,1600), (180,1700)].iter().cloned().collect();
+
+        let mut cfg = test_new(targets, id_mapping);
+        let edges = vec![(0,10), (10, 20), (20,30), (30,50), (50,60), (60,130), (60,140), (140,150), (140,160), (160,170), (160,180), (50,70), (20,40), (40,80), (10,90), (90,100), (100,110), (100,120)];
+
         // Test adding BBId edges
         for e in edges.clone() {
             cfg.add_edge(e);
