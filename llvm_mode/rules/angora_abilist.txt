@@ -6,11 +6,10 @@ fun:dfsan_get_label_range=discard
 
 ### RT
 # Trace-PC
-fun:__parmesan_trace_bb=discard
 fun:__parmesan_trace_bb=uninstrumented
-fun:__parmesan_trace_bb=custom
-fun:__parmesan_trace_bb_tt=discard
+fun:__parmesan_trace_bb=discard
 fun:__parmesan_trace_bb_tt=uninstrumented
+fun:__parmesan_trace_bb_tt=custom
 fun:__angora_trace_cmp=uninstrumented
 fun:__angora_trace_cmp=discard
 fun:__angora_trace_cmp_tt=uninstrumented
