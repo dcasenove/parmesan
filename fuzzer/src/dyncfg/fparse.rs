@@ -4,7 +4,7 @@ use std::io;
 use std::fs::File;
 use std::io::BufReader;
 
-use super::cfg::{CmpId, CallSiteId, Edge};
+use super::cfg::{CmpId, BbId, CallSiteId, Edge};
 use serde::de;
 use serde::de::{Deserialize, Deserializer};
 use std::hash::Hash;
@@ -16,6 +16,8 @@ pub struct CfgFile {
     pub targets: HashSet<CmpId>,
     #[serde(default)]
     pub edges: HashSet<Edge>,
+    #[serde(default)]
+    pub id_mapping: HashMap<BbId, CmpId>,
     #[serde(default, deserialize_with = "de_int_key")]
     pub callsite_dominators: HashMap<CallSiteId, HashSet<CmpId>>,
 }
