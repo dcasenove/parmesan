@@ -17,7 +17,6 @@ fn fast_init() {
 pub extern "C" fn __parmesan_trace_bb(
     bbid: u32,
 ) -> u32{
-    println!("In __parmesan_trace_bb");
     return bbid;
 }
 

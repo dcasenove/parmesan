@@ -264,14 +264,19 @@ pub extern "C" fn __dfsw___angora_trace_exploit_val_tt(
 pub extern "C" fn __parmesan_trace_bb_tt(
     _a: u32,
 ) {
-   println!("In __parmesan_trace_bb_tt\n");
+   panic!("Forbid calling __parmesan_trace_bb_tt directly");
 }
 
 #[no_mangle]
 pub extern "C" fn __dfsw___parmesan_trace_bb_tt(
     bbid: u32,
 ) {
-  println!("In __dfsw___parmesan_trace_bb_tt\n");
+    println!("__dfsw___parmesan_trace_bb_tt({})", bbid);
+
+    let mut lcl = LC.lock().expect("Could not lock LC.");
+    if let Some(ref mut lc) = *lcl {
+        lc.save_bb(bbid);
+    }
 }
 
 
