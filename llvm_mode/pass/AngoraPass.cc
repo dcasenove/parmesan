@@ -565,17 +565,7 @@ void AngoraLLVMPass::addFnWrap(Function &F) {
 
   StoreInst *SaveCtx = IRB.CreateStore(UpdatedCtx, AngoraContext);
   setInsNonSan(SaveCtx);
-/*
-  if (TrackMode) {
-    Value *BBCallSite = IRB.CreateLoad(ParmeSanIndCallSite);
-    setValueNonSan(BBCallSite);
-    Constant *BBCallee = ConstantInt::get(Int32Ty, EdgesId[BB]);
-    errs() << "EDGES ID: " << EdgesId[BB] << "\n";
-    CallInst *IndCallee = IRB.CreateCall(TraceIndTT, {BBCallSite, BBCallee});
-    setInsNonSan(IndCallee);
-  }
-*/
-  
+
   // *** Post Fn ***
   for (auto bb = F.begin(); bb != F.end(); bb++) {
     BasicBlock *BB = &(*bb);

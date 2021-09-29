@@ -302,7 +302,7 @@ pub extern "C" fn __dfsw___parmesan_trace_ind_tt(
     let mut lcl = LC.lock().expect("Could not lock LC.");
     if let Some(ref mut lc) = *lcl {
         let indirect_edge = (caller_bb, callee_bb);
-        lc.save_bb(indirect_edge);
+        lc.save_ind(indirect_edge);
     }
 
 }
