@@ -2,6 +2,7 @@ use std::f64;
 use math::mean;
 use petgraph::graphmap::DiGraphMap;
 use std::collections::{HashSet, HashMap};
+use std::time::Instant;
 use petgraph::visit::{Reversed, Bfs, Dfs};
 use petgraph::{Incoming, Outgoing};
 use angora_common::tag::TagSeg;
@@ -175,8 +176,14 @@ impl ControlFlowGraph {
 
 
     fn propagate_score(&mut self, bb: BbId) {
-
+        // Check how long it takes to clone the full graph. Result: On my machine the cloning part of adding all the edges to the graph at the beginning takes around 25% of the total time. Definitely expensive but probably not worth to change it right now.
+        #[cfg(test)]
+        let now = Instant::now();
         let graph_copy = &self.graph.clone();
+        #[cfg(test)]
+        println!("time to copy with node size {:?} and edge size {:?}: {}", &self.graph.node_count(), &self.graph.edge_count(), now.elapsed().as_micros());
+        #[cfg(test)]
+        let now2 = Instant::now();
         let rev_graph = Reversed(graph_copy);
         let mut visitor = Bfs::new(rev_graph, bb);
 
@@ -193,7 +200,8 @@ impl ControlFlowGraph {
                 self.graph.add_edge(p, visited, new_score);
             }
         }
-        
+        #[cfg(test)]
+        println!("time for rest of propagate: {}", now2.elapsed().as_micros());
     }
     
 
@@ -340,6 +348,8 @@ mod tests {
     use super::*;
     use std::iter::FromIterator;
     use crate::itertools::Itertools;
+    use rand::thread_rng;
+    use rand::seq::SliceRandom;
 
     fn test_new(targets: HashSet<CmpId>, id_mapping: HashMap<BbId, CmpId>) -> ControlFlowGraph {
         let result = ControlFlowGraph {
@@ -408,6 +418,32 @@ mod tests {
             let (from, to) = e;
             println!("weight for ({:?}, {:?}): {:?}", from, to, cfg.graph.edge_weight(from, to))
         }
+    }
+
+    // Test whether or not the graph clone in propagate_score is too time consuming.
+    #[test]
+    fn cfg_clone_time() {
+        // Create CFG
+        let num_nodes = 1000000;
+        let target_vec = vec![num_nodes*10];
+        let targets: HashSet<CmpId> = HashSet::from_iter(target_vec.iter().cloned());
+        let id_mapping: HashMap<BbId, CmpId> = [(num_nodes-1, num_nodes*10)].iter().cloned().collect();
+
+        let mut cfg = test_new(targets, id_mapping);
+        let nodes: Vec<BbId> = (0..num_nodes).collect();
+        
+        let mut edges = vec![];
+        for (a,b) in nodes.clone().into_iter().tuple_windows() {
+            edges.push((a,b));
+        }
+
+        edges.shuffle(&mut thread_rng());
+        
+        let now = Instant::now();
+        for e in edges.clone() {
+            cfg.add_edge(e);
+        }
+        println!("total time: {}", now.elapsed().as_micros());
     }
 }
 
