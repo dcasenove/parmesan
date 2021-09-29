@@ -374,7 +374,7 @@ impl Executor {
             return vec![];
         }
 
-        let (mut cond_list, bb_list) = track::load_track_data(
+        let (mut cond_list, ind_edges_list) = track::load_track_data(
             Path::new(&self.cmd.track_path),
             id as u32,
             speed,
@@ -385,8 +385,8 @@ impl Executor {
         let mut ind_dominator_offsets : HashMap<CmpId, Vec<TagSeg>> = HashMap::new();
         let mut ind_cond_list = vec![];
 
-        for (a,b) in bb_list.clone().into_iter().tuple_windows() {
-            debug!("BbId: {} to BBId: {}", a, b);
+        for t in ind_edges_list.clone().into_iter() {
+            debug!("BbId: {} to BBId: {}", t.0, t.1);
         }
 
         for (a,b) in cond_list.clone().into_iter().tuple_windows() {

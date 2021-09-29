@@ -109,6 +109,7 @@ public:
   Constant *TraceExploitTT;
   Constant *TraceBB;
   Constant *TraceBBTT;
+  Constant *TraceIndTT;
 
   FunctionType *TraceCmpTy;
   FunctionType *TraceSwTy;
@@ -118,6 +119,7 @@ public:
   FunctionType *TraceExploitTtTy;
   FunctionType *TraceBBTy;
   FunctionType *TraceBBTtTy;
+  FunctionType *TraceIndTTTy;
 
   // Custom setting
   AngoraABIList ABIList;
@@ -156,7 +158,7 @@ public:
   void addFnWrap(Function &F);
   void collectPreviousIndirectBranch(Instruction *Inst, SmallPtrSet<Instruction *, 16> *);
   void resetIndirectCallContext(IRBuilder<> *IRB);
-  void assignBasicBlockId(BasicBlock &BB);
+  void assignBasicBlockId(BasicBlock &BB, bool isFirst);
   void printCFG(raw_ostream &);
 };
 
@@ -366,6 +368,13 @@ void AngoraLLVMPass::initVariables(Module &M) {
     if (Function *F = dyn_cast<Function>(TraceBBTT)) {
       F->addAttribute(LLVM_ATTRIBUTE_LIST::FunctionIndex, Attribute::NoUnwind);
     }
+
+    Type *TraceIndTTArgs[2] = {Int32Ty, Int32Ty};
+    TraceIndTTTy = FunctionType::get(VoidTy, TraceIndTTArgs, false);
+    TraceIndTT = M.getOrInsertFunction("__parmesan_trace_ind_tt", TraceIndTTTy);
+    if (Function *F = dyn_cast<Function>(TraceIndTT)) {
+      F->addAttribute(LLVM_ATTRIBUTE_LIST::FunctionIndex, Attribute::NoUnwind);
+    }
   }
 
   std::vector<std::string> AllABIListFiles;
@@ -410,7 +419,7 @@ void AngoraLLVMPass::initVariables(Module &M) {
 };
 
 // Assign a random BasicBlock ID for CFG construction
-void AngoraLLVMPass::assignBasicBlockId(BasicBlock &BB) {
+void AngoraLLVMPass::assignBasicBlockId(BasicBlock &BB, bool isFirst) {
 
   BasicBlock::iterator IP = BB.getFirstInsertionPt();
   IRBuilder<> IRB(&(*IP));
@@ -423,6 +432,15 @@ void AngoraLLVMPass::assignBasicBlockId(BasicBlock &BB) {
 
     IDLog = IRB.CreateCall(TraceBBTT, {BBid});
     setInsNonSan(IDLog);
+    EdgesId[&BB] = random_id;
+    if(isFirst) {
+        Value *BBCallSite = IRB.CreateLoad(ParmeSanIndCallSite);
+        setValueNonSan(BBCallSite);
+        Constant *BBCallee = ConstantInt::get(Int32Ty, EdgesId[&BB]);
+        errs() << "EDGES ID: " << EdgesId[&BB] << "\n";
+        CallInst *IndCallee = IRB.CreateCall(TraceIndTT, {BBCallSite, BBCallee});
+        setInsNonSan(IndCallee);
+    }
   }
 }
 
@@ -547,7 +565,16 @@ void AngoraLLVMPass::addFnWrap(Function &F) {
 
   StoreInst *SaveCtx = IRB.CreateStore(UpdatedCtx, AngoraContext);
   setInsNonSan(SaveCtx);
-
+/*
+  if (TrackMode) {
+    Value *BBCallSite = IRB.CreateLoad(ParmeSanIndCallSite);
+    setValueNonSan(BBCallSite);
+    Constant *BBCallee = ConstantInt::get(Int32Ty, EdgesId[BB]);
+    errs() << "EDGES ID: " << EdgesId[BB] << "\n";
+    CallInst *IndCallee = IRB.CreateCall(TraceIndTT, {BBCallSite, BBCallee});
+    setInsNonSan(IndCallee);
+  }
+*/
   
   // *** Post Fn ***
   for (auto bb = F.begin(); bb != F.end(); bb++) {
@@ -598,8 +625,10 @@ void AngoraLLVMPass::processCall(Instruction *Inst) {
 
   // Store ParmeSan call site
   if (fp == NULL) {
-
-    IRB.CreateStore(CallSite, ParmeSanIndCallSite)->setMetadata(NoSanMetaId, NoneMetaNode);
+    BasicBlock *BB = Inst->getParent();
+    Constant *BBCallSite = ConstantInt::get(Int32Ty, EdgesId[BB]);
+    errs() << "Assigning BBCallSite: " << *BBCallSite << "\n";
+    IRB.CreateStore(BBCallSite, ParmeSanIndCallSite)->setMetadata(NoSanMetaId, NoneMetaNode);
   }
 }
 
@@ -1038,7 +1067,9 @@ bool AngoraLLVMPass::runOnModule(Module &M) {
 
     for (auto bi = bb_list.begin(); bi != bb_list.end(); bi++) {
       BasicBlock *BB = *bi;
-      assignBasicBlockId(*BB);
+      bool isFirst = false;
+      if (bi == bb_list.begin()) isFirst = true;
+      assignBasicBlockId(*BB, isFirst);
       std::vector<Instruction *> inst_list;
 
       for (auto inst = BB->begin(); inst != BB->end(); inst++) {
