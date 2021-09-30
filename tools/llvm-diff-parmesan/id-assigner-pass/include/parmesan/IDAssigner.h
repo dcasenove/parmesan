@@ -48,6 +48,7 @@ private:
   CmpsMap CmpMap;
   CallSiteDominators CallSiteDominatorsMap;
   IdAngoraMap IdToAngoraMap;
+  IdAngoraMap BbIdToCmpId;
 
   void collectCallSiteDominators(llvm::Function *F);
   void collectPreviousIndirectBranch(llvm::Instruction *Inst, llvm::SmallPtrSet<llvm::Instruction *, 16> *Result, llvm::SmallPtrSet<llvm::Instruction *, 16> *Seen);

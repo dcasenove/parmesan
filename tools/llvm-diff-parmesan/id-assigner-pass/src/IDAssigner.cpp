@@ -210,6 +210,9 @@ bool IDAssigner::runOnModule(Module &M) {
                         IdToAngoraMap[bb_id] = cmpId;
                       }
 
+                      // Get the parent of this block (the original block containint the CMP
+                      BbIdToCmpId[IdMap[callInst->getParent()->getSinglePredecessor()]] = cmpId;
+
                       // Store Angora CMP to BB id mapping
                       CmpMap[cmpId] = cmpBbSet;
                       cmpBbSet = std::set<IDAssigner::IdentifierType>();
@@ -405,13 +408,7 @@ const IDAssigner::CmpsCfg IDAssigner::getCmpCfg() const {
 }
 
 const IDAssigner::IdAngoraMap IDAssigner::getBBCmpMap() const {
-  IDAssigner::IdAngoraMap result;
-  for (auto e : CmpMap) {
-      for (auto bb: e.second) {
-          if (bb != 0) result.insert({bb, e.first});
-      }
-  }
-  return result;
+  return BbIdToCmpId;
 }
 
 // Stolen from AFLGo to be (somewhat) compatible with the same targets file
