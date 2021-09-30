@@ -6,6 +6,7 @@ use std::time::Instant;
 use petgraph::visit::{Reversed, Bfs, Dfs};
 use petgraph::{Incoming, Outgoing};
 use angora_common::tag::TagSeg;
+use bimap::BiMap;
 use super::fparse::CfgFile;
 
 pub type CmpId = u32;
@@ -23,7 +24,7 @@ const UNDEF_SCORE: Score = std::u32::MAX;
 pub struct ControlFlowGraph {
     graph: DiGraphMap<BbId, Score>,
     targets: HashSet<CmpId>,
-    id_mapping: HashMap<BbId, CmpId>,
+    id_mapping: BiMap<BbId, CmpId>,
     solved_targets: HashSet<CmpId>,
     indirect_edges: HashSet<Edge>,
     callsite_edges: HashMap<CallSiteId, HashSet<Edge>>,
@@ -68,7 +69,7 @@ impl ControlFlowGraph {
         let result = ControlFlowGraph {
             graph: DiGraphMap::new(),
             targets: HashSet::new(),
-            id_mapping: HashMap::new(),
+            id_mapping: BiMap::new(),
             solved_targets: HashSet::new(),
             indirect_edges: HashSet::new(),
             callsite_edges: HashMap::new(),
@@ -128,16 +129,6 @@ impl ControlFlowGraph {
         let result = HashSet::new();
         return result;
     }
-
-    pub fn get_cmp_from_bb(&self, bb: BbId) -> Option<CmpId> {
-        if !self.id_mapping.is_empty() {
-            if self.id_mapping.contains_key(&bb) {
-                return Some(self.id_mapping[&bb]);
-            }
-        }
-        None
-    }
-
 
     pub fn remove_target(&mut self, cmp: CmpId) {
         if self.targets.remove(&cmp) {
@@ -289,8 +280,7 @@ impl ControlFlowGraph {
     fn _score_for_cmp_inp(&self, bb: BbId, inp: Vec<u8>) -> Score {
         // Get the cmpid of the bbid if there is one
         let mut has_cmp = false;
-        let cmp_opt = self.get_cmp_from_bb(bb);
-        if let Some(cmp) = cmp_opt {
+        if let Some(cmp) = &self.id_mapping.get_by_left(&bb) {
             has_cmp = true;
             if self.targets.contains(&cmp) {
                 debug!("Calculate score for target: {}", cmp);
@@ -351,7 +341,7 @@ mod tests {
     use rand::thread_rng;
     use rand::seq::SliceRandom;
 
-    fn test_new(targets: HashSet<CmpId>, id_mapping: HashMap<BbId, CmpId>) -> ControlFlowGraph {
+    fn test_new(targets: HashSet<CmpId>, id_mapping: BiMap<BbId, CmpId>) -> ControlFlowGraph {
         let result = ControlFlowGraph {
             graph: DiGraphMap::new(),
             targets: targets,
@@ -384,7 +374,7 @@ mod tests {
         let target_vec = vec![1100, 1200];
         let targets = HashSet::from_iter(target_vec.iter().cloned());
 
-        let id_mapping: HashMap<BbId, CmpId> = [(10, 1000), (50, 1100), (80, 1200)].iter().cloned().collect();
+        let id_mapping: BiMap<BbId, CmpId> = [(10, 1000), (50, 1100), (80, 1200)].iter().cloned().collect();
 
         let mut cfg = test_new(targets, id_mapping);
         let edges = vec![(0,10), (10, 20), (20,30), (30,40), (40,50), (10,60), (60,70), (70,80)];
@@ -405,7 +395,7 @@ mod tests {
         let target_vec = vec![1700];
         let targets = HashSet::from_iter(target_vec.iter().cloned());
 
-        let id_mapping: HashMap<BbId, CmpId> = [(10, 1000), (20, 1100), (50, 1200), (60, 1300), (140,1400), (160,1500), (100,1600), (180,1700)].iter().cloned().collect();
+        let id_mapping: BiMap<BbId, CmpId> = [(10, 1000), (20, 1100), (50, 1200), (60, 1300), (140,1400), (160,1500), (100,1600), (180,1700)].iter().cloned().collect();
 
         let mut cfg = test_new(targets, id_mapping);
         let edges = vec![(0,10), (10, 20), (20,30), (30,50), (50,60), (60,130), (60,140), (140,150), (140,160), (160,170), (160,180), (50,70), (20,40), (40,80), (10,90), (90,100), (100,110), (100,120)];
@@ -427,7 +417,7 @@ mod tests {
         let num_nodes = 1000000;
         let target_vec = vec![num_nodes*10];
         let targets: HashSet<CmpId> = HashSet::from_iter(target_vec.iter().cloned());
-        let id_mapping: HashMap<BbId, CmpId> = [(num_nodes-1, num_nodes*10)].iter().cloned().collect();
+        let id_mapping: BiMap<BbId, CmpId> = [(num_nodes-1, num_nodes*10)].iter().cloned().collect();
 
         let mut cfg = test_new(targets, id_mapping);
         let nodes: Vec<BbId> = (0..num_nodes).collect();
