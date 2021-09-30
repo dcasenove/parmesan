@@ -8,11 +8,16 @@ use angora_common::{defs, tag::TagSeg};
 use runtime::get_log_data;
 use std::{collections::HashMap, io, path::Path};
 
+pub struct Parsed {
+    pub conds: Vec<CondStmt>,
+    pub indirect_edges: Vec<(u32, u32)>,
+}
+
 pub fn read_and_parse(
     out_f: &Path,
     is_pin_mode: bool,
     enable_exploitation: bool,
-) -> io::Result<Vec<CondStmt>> {
+) -> io::Result<Parsed> {
     let log_data = {
         if is_pin_mode {
             get_log_data_pin(out_f)?
@@ -39,7 +44,19 @@ pub fn read_and_parse(
 
         cond_list.push(cond);
     }
-    Ok(cond_list)
+
+    let mut ind_edges_list: Vec<(u32, u32)> = Vec::new();
+    for ind_base in log_data.ind_edges.iter(){
+        let ind_tuple = (u32::from(ind_base.0), u32::from(ind_base.1));
+        ind_edges_list.push(ind_tuple);
+    }
+
+    let p = Parsed {
+        conds: cond_list,
+        indirect_edges: ind_edges_list,
+    };
+
+    Ok(p)
 }
 
 fn get_offsets_and_variables(
@@ -80,14 +97,20 @@ pub fn load_track_data(
     speed: u32,
     is_pin_mode: bool,
     enable_exploitation: bool,
-) -> Vec<CondStmt> {
-    let mut cond_list = match read_and_parse(out_f, is_pin_mode, enable_exploitation) {
+) -> (Vec<CondStmt>, Vec<(u32, u32)>) {
+    let parsed_data = match read_and_parse(out_f, is_pin_mode, enable_exploitation) {
         Result::Ok(val) => val,
         Result::Err(err) => {
             error!("parse track file error!! {:?}", err);
-            vec![]
+            Parsed{
+                conds: vec![],
+                indirect_edges: vec![],
+            }
         }
     };
+
+    let mut cond_list = parsed_data.conds;
+    let indirect_edges_list = parsed_data.indirect_edges;
 
     for cond in cond_list.iter_mut() {
         cond.base.belong = id;
@@ -99,5 +122,5 @@ pub fn load_track_data(
 
     filter::filter_cond_list(&mut cond_list);
 
-    cond_list
+    (cond_list, indirect_edges_list)
 }

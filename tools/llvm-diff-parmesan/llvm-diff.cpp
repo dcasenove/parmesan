@@ -22,6 +22,7 @@
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/raw_ostream.h"
+#include <fstream>
 #include <string>
 #include <utility>
 #include "parmesan/IDAssigner.h"
@@ -129,7 +130,8 @@ int main(int argc, char **argv) {
   if (EmitJson) {
       std::error_code EC;
       raw_fd_ostream InfoFile("targets.json", EC);
-      Consumer.printStatsJson(InfoFile);
+      std::ifstream  src("edges.json", std::ios::binary);
+      Consumer.printStatsJson(InfoFile, src);
   }
   return Consumer.hadDifferences();
 }

@@ -14,6 +14,13 @@ fn fast_init() {
 }
 
 #[no_mangle]
+pub extern "C" fn __parmesan_trace_bb(
+    bbid: u32,
+) -> u32{
+    return bbid;
+}
+
+#[no_mangle]
 pub extern "C" fn __angora_trace_cmp(
     condition: u32,
     cmpid: u32,

@@ -14,11 +14,11 @@ fn main() {
     let path = PathBuf::from(&args[1]);
 
     // let t = load_track_data(path.as_path(), 0, 0, 0, 0);
-    let t = match read_and_parse(path.as_path(), true, false) {
+    let parsed_data = match read_and_parse(path.as_path(), true, false) {
         Result::Ok(val) => val,
         Result::Err(err) => panic!("parse track file error!! {:?}", err),
     };
-
+    let t = parsed_data.conds;
     let mut output_format = "json";
     if args.len() > 2 {
         if args[2] == "line" {
