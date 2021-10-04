@@ -141,18 +141,12 @@ IDAssigner::CmpIdType IDAssigner::getAngoraCmpIdForBB(BasicBlock *BB) {
 
 void IDAssigner::collectBasicBlockId(BasicBlock *BB) {
     auto *Instr = BB->getFirstNonPHI();
-    if (CallInst *callInst = dyn_cast<CallInst>(Instr)) {
-         if (Function *calledFunction = callInst->getCalledFunction()) {
-             if (calledFunction->getName() == "__parmesan_trace_bb") {
-                 int32_t bbId = 0;
-                 auto bbIdArg = callInst->getArgOperand(0);
-                 if (ConstantInt* CI = dyn_cast<ConstantInt>(bbIdArg)) {
-                      bbId = CI->getSExtValue();
-                 }
-                 IdMap[BB] = bbId;
-             }
-        }
-    }
+    MDNode *MD = Instr->getMetadata("bbid");
+    if(MD) {
+        ValueAsMetadata *ValueId = dyn_cast<ValueAsMetadata>(MD->getOperand(0));
+        ConstantInt *Id = dyn_cast<ConstantInt>(ValueId->getValue());
+        IdMap[BB] = Id->getZExtValue();
+      }
 }
 
 bool IDAssigner::runOnModule(Module &M) {
@@ -221,7 +215,6 @@ bool IDAssigner::runOnModule(Module &M) {
           }
       }
     }
-
     collectCallSiteDominators(&F);
   }
 
