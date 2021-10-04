@@ -141,20 +141,23 @@ impl ControlFlowGraph {
         self.targets.contains(&cmp) || self.solved_targets.contains(&cmp)
     }
 
+    pub fn get_bb_from_cmp(&self, cmp: CmpId) -> Option<&BbId> {
+        return self.id_mapping.get_by_right(&cmp);
+    }
 
     fn handle_new_edge(&mut self, edge: Edge) {
         let (src, dst) = edge;
 
         // 1) Get score for dst
-        let dst_score = self._score_for_cmp(dst);
+        let dst_score = self._score_for_bb(dst);
         
         // 2) if src_score changed
-        let old_src_score = self._score_for_cmp(src);
+        let old_src_score = self._score_for_bb(src);
 
         // Insert edge in graph
         self.graph.add_edge(src, dst, dst_score);
 
-        let new_src_score = self._score_for_cmp(src);
+        let new_src_score = self._score_for_bb(src);
 
         if old_src_score == new_src_score {
             // No change in score
@@ -179,7 +182,7 @@ impl ControlFlowGraph {
         let mut visitor = Bfs::new(rev_graph, bb);
 
         while let Some(visited) = visitor.next(rev_graph) {
-            let new_score = self._score_for_cmp(visited);
+            let new_score = self._score_for_bb(visited);
             let mut predecessors = vec![];
             {
                 let neighbors = self.graph.neighbors_directed(visited, Incoming);
@@ -201,8 +204,8 @@ impl ControlFlowGraph {
         self.graph.contains_edge(a, b)
     }
 
-    pub fn has_score(&self, cmp: CmpId) -> bool {
-        if self._score_for_cmp(cmp) != UNDEF_SCORE {
+    pub fn has_score(&self, bb: BbId) -> bool {
+        if self._score_for_bb(bb) != UNDEF_SCORE {
             return true;
         } 
         false
@@ -259,27 +262,27 @@ impl ControlFlowGraph {
         false
     }
 
-    pub fn score_for_cmp(&self, cmp: CmpId) -> Score {
-        let score = self._score_for_cmp(cmp);
+    pub fn score_for_bb(&self, bb: CmpId) -> Score {
+        let score = self._score_for_bb(bb);
         if score != UNDEF_SCORE {
             debug!("Calculated score: {}", score);
         }
         score
     }
 
-    pub fn score_for_cmp_inp(&self, cmp: CmpId, inp: Vec<u8>) -> Score {
-        let score = self._score_for_cmp_inp(cmp, inp);
+    pub fn score_for_bb_inp(&self, bb: BbId, inp: Vec<u8>) -> Score {
+        let score = self._score_for_bb_inp(bb, inp);
         if score != UNDEF_SCORE {
             debug!("Calculated score: {}", score);
         }
         score
     }
 
-    fn _score_for_cmp(&self, bb: BbId) -> Score {
-        self._score_for_cmp_inp(bb, vec![])
+    fn _score_for_bb(&self, bb: BbId) -> Score {
+        self._score_for_bb_inp(bb, vec![])
     }
 
-    fn _score_for_cmp_inp(&self, bb: BbId, inp: Vec<u8>) -> Score {
+    fn _score_for_bb_inp(&self, bb: BbId, inp: Vec<u8>) -> Score {
         // Get the cmpid of the bbid if there is one
         let mut has_cmp = false;
         if let Some(cmp) = &self.id_mapping.get_by_left(&bb) {
