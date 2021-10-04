@@ -132,7 +132,12 @@ impl ControlFlowGraph {
 
     pub fn remove_target(&mut self, cmp: CmpId) {
         if self.targets.remove(&cmp) {
-            self.propagate_score(cmp);
+            if let Some(&bb) = self.id_mapping.get_by_right(&cmp) {
+                self.propagate_score(bb);
+            }
+            else {
+                warn!("CFG warning: couldn't propagate score when removing target");
+            }
             self.solved_targets.insert(cmp);
         }
     }
