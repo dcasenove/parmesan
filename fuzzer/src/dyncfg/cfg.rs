@@ -247,11 +247,13 @@ impl ControlFlowGraph {
         vals_norm.sum()
     }
 
-    pub fn has_path_to_target(&self, target: CmpId) -> bool {
-        let mut dfs = Dfs::new(&self.graph, target);
+    pub fn has_path_to_target(&self, start: BbId) -> bool {
+        let mut dfs = Dfs::new(&self.graph, start);
         while let Some(visited) = dfs.next(&self.graph) {
-            if self.targets.contains(&visited) {
-                return true;
+            if let Some(cmp) = &self.id_mapping.get_by_left(&visited) {
+                if self.targets.contains(&cmp) {
+                    return true;
+                }
             }
         }
         false
@@ -434,6 +436,31 @@ mod tests {
             cfg.add_edge(e);
         }
         println!("total time: {}", now.elapsed().as_micros());
+    }
+
+    // Test whether or not has_path_to_target works
+    #[test]
+    fn cfg_path_to_target() {
+        // Create CFG
+        let target_vec = vec![1700];
+        let targets = HashSet::from_iter(target_vec.iter().cloned());
+
+        let id_mapping: BiMap<BbId, CmpId> = [(10, 1000), (20, 1100), (50, 1200), (60, 1300), (140,1400), (160,1500), (100,1600), (180,1700)].iter().cloned().collect();
+
+        let mut cfg = test_new(targets, id_mapping);
+        let edges = vec![(0,10), (10, 20), (20,30), (30,50), (50,60), (60,130), (60,140), (140,150), (140,160), (160,170), (160,180), (50,70), (20,40), (40,80), (10,90), (90,100), (100,110), (100,120)];
+
+        // Adding BBId edges
+        for e in edges.clone() {
+            cfg.add_edge(e);
+        }
+
+        // Test path to target
+        assert_eq!(cfg.has_path_to_target(0), true);
+        assert_eq!(cfg.has_path_to_target(90), false);
+        assert_eq!(cfg.has_path_to_target(80), false);
+        assert_eq!(cfg.has_path_to_target(30), true);
+        assert_eq!(cfg.has_path_to_target(140), true);
     }
 }
 
