@@ -10,6 +10,7 @@ use serde::de::{Deserialize, Deserializer};
 use std::hash::Hash;
 use std::str::FromStr;
 use std::fmt::Display;
+use bimap::BiMap;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct CfgFile {
@@ -17,7 +18,7 @@ pub struct CfgFile {
     #[serde(default)]
     pub edges: HashSet<Edge>,
     #[serde(default)]
-    pub id_mapping: HashMap<BbId, CmpId>,
+    pub id_mapping: BiMap<BbId, CmpId>,
     #[serde(default, deserialize_with = "de_int_key")]
     pub callsite_dominators: HashMap<CallSiteId, HashSet<CmpId>>,
 }
