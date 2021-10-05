@@ -383,54 +383,63 @@ impl Executor {
         );
 
         let mut ind_dominator_offsets : HashMap<CmpId, Vec<TagSeg>> = HashMap::new();
-        let mut ind_cond_list = vec![];
+        // let mut ind_cond_list = vec![];
 
         for t in ind_edges_list.clone().into_iter() {
-            debug!("BbId: {} to BBId: {}", t.0, t.1);
+            info!("BbId: {} to BBId: {}", t.0, t.1);
+            let edge = (t.0, t.1);
+            info!("edge in ind_edges_list: {:?}", edge);
         }
 
-        for (a,b) in cond_list.clone().into_iter().tuple_windows() {
-            let mut dyncfg = self.depot.cfg.write().unwrap();
-            let edge = (a.base.cmpid, b.base.cmpid);
-            let _is_new = dyncfg.add_edge(edge);
+        for cond in cond_list.clone().into_iter() {
+            if cond.base.last_callsite != 0 {
+                // check if indirect edge was already created
 
-            // Collect indirect call dominator taint
-            if dyncfg.dominates_indirect_call(a.base.cmpid) {
-                let entry = ind_dominator_offsets.entry(a.base.cmpid).or_insert(vec![]);
-                debug!("OFFSET set {} {:?}", a.base.cmpid, a.offsets);
-                *entry = a.offsets;
             }
+        }
 
-            debug!("VARIABLES: {:?}", a.variables);
-            if b.base.last_callsite != 0 {
-                debug!("ADD Indirect edge {:?}: {}!!", edge, b.base.last_callsite);
-                dyncfg.set_edge_indirect(edge, b.base.last_callsite);
-                let dominators = 
-                  dyncfg.get_callsite_dominators(b.base.last_callsite);
-                let mut fixed_offsets = vec![];
-                for d in dominators {
-                    if let Some(offsets) = ind_dominator_offsets.get(&d) {
-                        fixed_offsets.extend(offsets.clone());
-                    }
-                }
-                dyncfg.set_magic_bytes(edge, &buf, &fixed_offsets);
+        // for (a,b) in cond_list.clone().into_iter().tuple_windows() {
+        //     let mut dyncfg = self.depot.cfg.write().unwrap();
+        //     let edge = (a.base.cmpid, b.base.cmpid);
+        //     // let _is_new = dyncfg.add_edge(edge);
+
+        //     // Collect indirect call dominator taint
+        //     if dyncfg.dominates_indirect_call(a.base.cmpid) {
+        //         let entry = ind_dominator_offsets.entry(a.base.cmpid).or_insert(vec![]);
+        //         debug!("OFFSET set {} {:?}", a.base.cmpid, a.offsets);
+        //         *entry = a.offsets;
+        //     }
+
+        //     debug!("VARIABLES: {:?}", a.variables);
+        //     if b.base.last_callsite != 0 {
+        //         debug!("ADD Indirect edge {:?}: {}!!", edge, b.base.last_callsite);
+        //         dyncfg.set_edge_indirect(edge, b.base.last_callsite);
+        //         let dominators = 
+        //           dyncfg.get_callsite_dominators(b.base.last_callsite);
+        //         let mut fixed_offsets = vec![];
+        //         for d in dominators {
+        //             if let Some(offsets) = ind_dominator_offsets.get(&d) {
+        //                 fixed_offsets.extend(offsets.clone());
+        //             }
+        //         }
+        //         dyncfg.set_magic_bytes(edge, &buf, &fixed_offsets);
 
 
-                // Set offsets
-                let mut fixed_cond = b.clone();
-                fixed_cond.offsets.append(&mut fixed_offsets);
-                let var_len = fixed_cond.variables.len();
-                for (i,v) in dyncfg.get_magic_bytes(edge) {
-                    if i < var_len - 1 {
-                        fixed_cond.variables[i] = v;
-                        debug!("FIX VAR {} to '{}'", i, v);
-                    }
-                }
-                ind_cond_list.push(fixed_cond);
-            }
+        //         // Set offsets
+        //         let mut fixed_cond = b.clone();
+        //         fixed_cond.offsets.append(&mut fixed_offsets);
+        //         let var_len = fixed_cond.variables.len();
+        //         for (i,v) in dyncfg.get_magic_bytes(edge) {
+        //             if i < var_len - 1 {
+        //                 fixed_cond.variables[i] = v;
+        //                 debug!("FIX VAR {} to '{}'", i, v);
+        //             }
+        //         }
+        //         ind_cond_list.push(fixed_cond);
+        //     }
 
             
-        }
+        // }
 
 
         for cond in cond_list.iter_mut() {
@@ -441,7 +450,7 @@ impl Executor {
         }
 
         // Add fixed conds to result
-        cond_list.append(&mut ind_cond_list);
+        // cond_list.append(&mut ind_cond_list);
 
         self.local_stats.track_time += t_now.into();
         cond_list
