@@ -43,8 +43,8 @@ impl Logger {
         }
     }
 
-    pub fn save_bb(&mut self, bb: u32) {
-        self.data.bb_list.push(bb);
+    pub fn save_ind(&mut self, indirect_edge: (u32, u32)) {
+        self.data.ind_edges.push(indirect_edge);
     }
 
     // like the fn in fparser.rs

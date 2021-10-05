@@ -10,7 +10,7 @@ use std::{collections::HashMap, io, path::Path};
 
 pub struct Parsed {
     pub conds: Vec<CondStmt>,
-    pub bbs: Vec<u32>,
+    pub indirect_edges: Vec<(u32, u32)>,
 }
 
 pub fn read_and_parse(
@@ -45,15 +45,15 @@ pub fn read_and_parse(
         cond_list.push(cond);
     }
 
-    let mut bb_list: Vec<u32> = Vec::new();
-    for bb_base in log_data.bb_list.iter(){
-        let bb_id = u32::from(*bb_base);
-        bb_list.push(bb_id);
+    let mut ind_edges_list: Vec<(u32, u32)> = Vec::new();
+    for ind_base in log_data.ind_edges.iter(){
+        let ind_tuple = (u32::from(ind_base.0), u32::from(ind_base.1));
+        ind_edges_list.push(ind_tuple);
     }
 
     let p = Parsed {
         conds: cond_list,
-        bbs: bb_list,
+        indirect_edges: ind_edges_list,
     };
 
     Ok(p)
@@ -97,20 +97,20 @@ pub fn load_track_data(
     speed: u32,
     is_pin_mode: bool,
     enable_exploitation: bool,
-) -> (Vec<CondStmt>, Vec<u32>) {
+) -> (Vec<CondStmt>, Vec<(u32, u32)>) {
     let parsed_data = match read_and_parse(out_f, is_pin_mode, enable_exploitation) {
         Result::Ok(val) => val,
         Result::Err(err) => {
             error!("parse track file error!! {:?}", err);
             Parsed{
                 conds: vec![],
-                bbs: vec![],
+                indirect_edges: vec![],
             }
         }
     };
 
     let mut cond_list = parsed_data.conds;
-    let bb_list = parsed_data.bbs;
+    let indirect_edges_list = parsed_data.indirect_edges;
 
     for cond in cond_list.iter_mut() {
         cond.base.belong = id;
@@ -122,5 +122,5 @@ pub fn load_track_data(
 
     filter::filter_cond_list(&mut cond_list);
 
-    (cond_list, bb_list)
+    (cond_list, indirect_edges_list)
 }
