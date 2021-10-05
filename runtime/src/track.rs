@@ -260,25 +260,6 @@ pub extern "C" fn __dfsw___angora_trace_exploit_val_tt(
     log_cmp_callsite(cmpid, context, last_callsite,  defs::COND_FALSE_ST, op, size, lb, 0, val, 0);
 }
 
-#[no_mangle]
-pub extern "C" fn __parmesan_trace_bb_tt(
-    _a: u32,
-) {
-   panic!("Forbid calling __parmesan_trace_bb_tt directly");
-}
-
-#[no_mangle]
-pub extern "C" fn __dfsw___parmesan_trace_bb_tt(
-    bbid: u32,
-) {
-    println!("__dfsw___parmesan_trace_bb_tt({})", bbid);
-/*
-    let mut lcl = LC.lock().expect("Could not lock LC.");
-    if let Some(ref mut lc) = *lcl {
-        lc.save_bb(bbid);
-    }
-*/
-}
 
 #[no_mangle]
 pub extern "C" fn __parmesan_trace_ind_tt(

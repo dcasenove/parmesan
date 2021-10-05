@@ -107,8 +107,6 @@ public:
   Constant *TraceSwTT;
   Constant *TraceFnTT;
   Constant *TraceExploitTT;
-  Constant *TraceBB;
-  Constant *TraceBBTT;
   Constant *TraceIndTT;
 
   FunctionType *TraceCmpTy;
@@ -117,8 +115,6 @@ public:
   FunctionType *TraceSwTtTy;
   FunctionType *TraceFnTtTy;
   FunctionType *TraceExploitTtTy;
-  FunctionType *TraceBBTy;
-  FunctionType *TraceBBTtTy;
   FunctionType *TraceIndTTTy;
 
   // Custom setting
@@ -127,6 +123,7 @@ public:
 
   // Meta
   unsigned NoSanMetaId;
+  unsigned MetaBBId;
   MDTuple *NoneMetaNode;
 
   AngoraLLVMPass() : ModulePass(ID) {}
@@ -275,6 +272,7 @@ void AngoraLLVMPass::initVariables(Module &M) {
   ColdCallWeights = MDBuilder(C).createBranchWeights(1, 1000);
 
   NoSanMetaId = C.getMDKindID("nosanitize");
+  MetaBBId = C.getMDKindID("bbid");
   NoneMetaNode = MDNode::get(C, None);
 
   AngoraContext =
@@ -323,13 +321,6 @@ void AngoraLLVMPass::initVariables(Module &M) {
       // F->addAttribute(1, Attribute::ZExt);
     }
 
-    Type *TraceBBArgs[1] = {Int32Ty};
-    TraceBBTy = FunctionType::get(Int32Ty, TraceBBArgs, false);
-    TraceBB = M.getOrInsertFunction("__parmesan_trace_bb", TraceBBTy);
-    if (Function *F = dyn_cast<Function>(TraceBB)) {
-      F->addAttribute(LLVM_ATTRIBUTE_LIST::FunctionIndex, Attribute::NoUnwind);
-    }
-
   } else if (TrackMode) {
     Type *TraceCmpTtArgs[8] = {Int32Ty, Int32Ty, Int32Ty, Int32Ty, Int32Ty,
                                Int64Ty, Int64Ty, Int32Ty};
@@ -359,13 +350,6 @@ void AngoraLLVMPass::initVariables(Module &M) {
     TraceExploitTT = M.getOrInsertFunction("__angora_trace_exploit_val_tt",
                                            TraceExploitTtTy);
     if (Function *F = dyn_cast<Function>(TraceExploitTT)) {
-      F->addAttribute(LLVM_ATTRIBUTE_LIST::FunctionIndex, Attribute::NoUnwind);
-    }
-
-    Type *TraceBBTtArgs[1] = {Int32Ty};
-    TraceBBTtTy = FunctionType::get(Int32Ty, TraceBBTtArgs, false);
-    TraceBBTT = M.getOrInsertFunction("__parmesan_trace_bb_tt", TraceBBTtTy);
-    if (Function *F = dyn_cast<Function>(TraceBBTT)) {
       F->addAttribute(LLVM_ATTRIBUTE_LIST::FunctionIndex, Attribute::NoUnwind);
     }
 
@@ -430,14 +414,12 @@ void AngoraLLVMPass::assignBasicBlockId(BasicBlock &BB, bool isFirst) {
     unsigned int random_id = getRandomBasicBlockId();
     Constant *BBid = ConstantInt::get(Int32Ty, random_id);
 
-    IDLog = IRB.CreateCall(TraceBBTT, {BBid});
-    setInsNonSan(IDLog);
     EdgesId[&BB] = random_id;
     if(isFirst) {
         Value *BBCallSite = IRB.CreateLoad(ParmeSanIndCallSite);
         setValueNonSan(BBCallSite);
         Constant *BBCallee = ConstantInt::get(Int32Ty, EdgesId[&BB]);
-        errs() << "EDGES ID: " << EdgesId[&BB] << "\n";
+
         CallInst *IndCallee = IRB.CreateCall(TraceIndTT, {BBCallSite, BBCallee});
         setInsNonSan(IndCallee);
     }
@@ -450,19 +432,21 @@ void AngoraLLVMPass::countEdge(Module &M, BasicBlock &BB) {
   if (!FastMode)
     return;
 
-  // LLVMContext &C = M.getContext();
+  LLVMContext &C = M.getContext();
   unsigned int cur_loc = getRandomBasicBlockId();
   EdgesId[&BB] = cur_loc;
   ConstantInt *CurLoc = ConstantInt::get(Int32Ty, cur_loc);
 
+  SmallVector<Metadata *, 32> Operands;
+  Operands.push_back(llvm::ValueAsMetadata::getConstant(CurLoc));
+  auto *Node =  MDTuple::get(C, Operands);
+
   BasicBlock::iterator IP = BB.getFirstInsertionPt();
   IRBuilder<> IRB(&(*IP));
 
-  CallInst *IDLog = IRB.CreateCall(TraceBB, {CurLoc});
-  setInsNonSan(IDLog);
-
   LoadInst *PrevLoc = IRB.CreateLoad(AngoraPrevLoc);
   setInsNonSan(PrevLoc);
+  PrevLoc->setMetadata(MetaBBId, Node);
 
   Value *PrevLocCasted = IRB.CreateZExt(PrevLoc, Int32Ty);
   setValueNonSan(PrevLocCasted);
@@ -534,16 +518,23 @@ void AngoraLLVMPass::addFnWrap(Function &F) {
   Instruction *InsertPoint = &(*(BB->getFirstInsertionPt()));
   IRBuilder<> IRB(InsertPoint);
 
+  Value *CallSite = IRB.CreateLoad(AngoraCallSite);
+  setValueNonSan(CallSite);
+
   if(FastMode) {
+    LLVMContext &C = BB->getParent()->getParent()->getContext();
+
     unsigned int cur_loc = getRandomBasicBlockId();
     EdgesId[BB] = cur_loc;
     ConstantInt *CurLoc = ConstantInt::get(Int32Ty, cur_loc);
-    CallInst *IDLog = IRB.CreateCall(TraceBB, {CurLoc});
-    setInsNonSan(IDLog);
-  }
 
-  Value *CallSite = IRB.CreateLoad(AngoraCallSite);
-  setValueNonSan(CallSite);
+    SmallVector<Metadata *, 32> Operands;
+    Operands.push_back(llvm::ValueAsMetadata::getConstant(CurLoc));
+    auto *Node =  MDTuple::get(C, Operands);
+
+    if (Instruction *ins = dyn_cast<Instruction>(CallSite))
+        ins->setMetadata(MetaBBId, Node);
+  }
 
   Value *OriCtxVal =IRB.CreateLoad(AngoraContext);
   setValueNonSan(OriCtxVal);
@@ -617,7 +608,6 @@ void AngoraLLVMPass::processCall(Instruction *Inst) {
   if (fp == NULL) {
     BasicBlock *BB = Inst->getParent();
     Constant *BBCallSite = ConstantInt::get(Int32Ty, EdgesId[BB]);
-    errs() << "Assigning BBCallSite: " << *BBCallSite << "\n";
     IRB.CreateStore(BBCallSite, ParmeSanIndCallSite)->setMetadata(NoSanMetaId, NoneMetaNode);
   }
 }
