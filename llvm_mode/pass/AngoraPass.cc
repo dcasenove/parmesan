@@ -989,15 +989,16 @@ void AngoraLLVMPass::printCFG(raw_ostream &out) {
 
   bool first = true;
   for (auto e : CfgEdges) {
-      if (first) {
-          first = false;
-      } else {
-        out << ", ";
-      }
-      BasicBlock *src;
-      BasicBlock *dst;
+      BasicBlock *src, *dst;
       std::tie(src,dst) = e;
-      out << "[" << EdgesId[src] << "," << EdgesId[dst] << "]";
+      if(EdgesId[src] != 0 && EdgesId[dst] != 0) {
+          if (first) {
+            first = false;
+          } else {
+            out << ", ";
+          }
+          out << "[" << EdgesId[src] << "," << EdgesId[dst] << "]";
+      }
   }
   out << "]\n";
 }
