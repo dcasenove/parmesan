@@ -389,7 +389,8 @@ impl Executor {
             debug!("BbId: {} to BBId: {}", t.0, t.1);
             let edge = (t.0, t.1);
             let mut dyncfg = self.depot.cfg.write().unwrap();
-            dyncfg.add_edge(edge);
+            let _is_new = dyncfg.add_edge(t);
+            dyncfg.set_edge_indirect(t, t.0);
         }
 
         for (a,b) in cond_list.clone().into_iter().tuple_windows() {
@@ -405,8 +406,6 @@ impl Executor {
 
             debug!("VARIABLES: {:?}", a.variables);
             if b.base.last_callsite != 0 {
-                debug!("ADD Indirect edge {:?}: {}!!", edge, b.base.last_callsite);
-                dyncfg.set_edge_indirect(edge, b.base.last_callsite);
                 let dominators =
                   dyncfg.get_callsite_dominators(b.base.last_callsite);
                 let mut fixed_offsets = vec![];
