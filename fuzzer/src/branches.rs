@@ -122,7 +122,7 @@ impl Branches {
         path
     }
 
-    pub fn has_new(&mut self, status: StatusType, directed: bool) -> (bool, bool, usize) {
+    pub fn has_new(&mut self, status: StatusType) -> (bool, bool, usize) {
         let gb_map = match status {
             StatusType::Normal => &self.global.virgin_branches,
             StatusType::Timeout => &self.global.tmouts_branches,
@@ -163,14 +163,6 @@ impl Branches {
             has_new_edge = true;
         }
 
-        /*
-        for (a, b) in to_write.clone().into_iter().tuple_windows() {
-            let mut dyncfg = self.global.cfg.write().unwrap();
-            let edge = (a.0, b.0);
-            dyncfg.add_bb_edge(edge);
-        }
-        */
-
         if to_write.is_empty() {
             return (false, false, edge_num);
         }
@@ -183,17 +175,7 @@ impl Branches {
             }
         }
 
-        let mut has_new_directed_edge = false;
-        for &br in &to_write {
-            let dyncfg = self.global.cfg.read().unwrap();
-            if dyncfg.has_path_to_target(br.0 as CmpId) {
-                has_new_directed_edge = true;
-                break;
-            }
-        }
-
-        //(has_new_directed_edge, has_new_edge, edge_num)
-        (if !directed {true} else {has_new_directed_edge}, has_new_edge, edge_num)
+        (true, has_new_edge, edge_num)
     }
 }
 

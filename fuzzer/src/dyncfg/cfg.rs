@@ -255,7 +255,7 @@ impl ControlFlowGraph {
         vals_norm.sum()
     }
 
-    pub fn has_path_to_target(&self, start: BbId) -> bool {
+    fn has_path_to_target_bb(&self, start: BbId) -> bool {
         let mut dfs = Dfs::new(&self.graph, start);
         while let Some(visited) = dfs.next(&self.graph) {
             if let Some(cmp) = &self.id_mapping.get_by_left(&visited) {
@@ -263,6 +263,13 @@ impl ControlFlowGraph {
                     return true;
                 }
             }
+        }
+        false
+    }
+
+    pub fn has_path_to_target(&self, cmp: CmpId) -> bool {
+        if let Some(&bb) = self.get_bb_from_cmp(cmp) {
+            return self.has_path_to_target_bb(bb);
         }
         false
     }
@@ -446,7 +453,7 @@ mod tests {
         println!("total time: {}", now.elapsed().as_micros());
     }
 
-    // Test whether or not has_path_to_target works
+    // Test whether or not has_path_to_target_bb works
     #[test]
     fn cfg_path_to_target() {
         // Create CFG
@@ -464,11 +471,11 @@ mod tests {
         }
 
         // Test path to target
-        assert_eq!(cfg.has_path_to_target(0), true);
-        assert_eq!(cfg.has_path_to_target(90), false);
-        assert_eq!(cfg.has_path_to_target(80), false);
-        assert_eq!(cfg.has_path_to_target(30), true);
-        assert_eq!(cfg.has_path_to_target(140), true);
+        assert_eq!(cfg.has_path_to_target_bb(0), true);
+        assert_eq!(cfg.has_path_to_target_bb(90), false);
+        assert_eq!(cfg.has_path_to_target_bb(80), false);
+        assert_eq!(cfg.has_path_to_target_bb(30), true);
+        assert_eq!(cfg.has_path_to_target_bb(140), true);
     }
 }
 

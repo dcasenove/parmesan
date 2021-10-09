@@ -224,7 +224,7 @@ impl Executor {
                 unmem_status
             );
             // crash or hang
-            if self.branches.has_new(unmem_status, self.is_directed).0 {
+            if self.branches.has_new(unmem_status).0 {
                 self.depot.save(unmem_status, &buf, cmpid);
             }
         }
@@ -233,7 +233,7 @@ impl Executor {
 
     fn do_if_has_new(&mut self, buf: &Vec<u8>, status: StatusType, _explored: bool, cmpid: u32) {
         // new edge: one byte in bitmap
-        let (has_new_path, has_new_edge, edge_num) = self.branches.has_new(status, self.is_directed);
+        let (has_new_path, has_new_edge, edge_num) = self.branches.has_new(status);
 
         if has_new_path {
             self.has_new_path = true;
@@ -443,6 +443,12 @@ impl Executor {
 
         // Add fixed conds to result
         cond_list.append(&mut ind_cond_list);
+
+        // if fuzzer is directed mode, retain only if there is path to target
+        if self.is_directed {
+            let dyncfg = self.depot.cfg.read().unwrap();
+            cond_list.retain(|x| dyncfg.has_path_to_target(x.base.cmpid));
+        }
 
         self.local_stats.track_time += t_now.into();
         cond_list

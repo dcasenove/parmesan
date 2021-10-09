@@ -174,7 +174,7 @@ impl Depot {
                 q.change_priority(&cond, p);
             }
             else {
-                warn!("CFG warning: cannot update entry in depot");
+                warn!("CFG warning: cannot update entry in depot with cmpid {:?}", cond.base.cmpid);
             }
         } else {
             warn!("Update entry: can not find this cond");

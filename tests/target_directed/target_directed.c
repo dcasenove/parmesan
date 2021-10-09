@@ -8,31 +8,31 @@ char buf[12];
 
 void target_fun_1(char buf[])
 {
-    if (buf[0] == 'a') {
+    if (buf[1] == 'a') {
         abort();
     }
 }
 void target_fun_2(char buf[])
 {
-    if (buf[0] == 'b') {
+    if (buf[1] == 'b') {
         abort();
     }
 }
 void target_fun_3(char buf[])
 {
-    if (buf[0] == 'c') {
+    if (buf[1] == 'c') {
         abort();
     }
 }
 void target_fun_4(char buf[])
 {
-    if (buf[0] == 'd') {
+    if (buf[1] == 'd') {
         abort();
     }
 }
 void target_fun_5(char buf[])
 {
-    if (buf[0] == 'e') {
+    if (buf[1] == 'f') {
         abort();
     }
 }
