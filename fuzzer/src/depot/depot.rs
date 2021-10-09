@@ -124,7 +124,7 @@ impl Depot {
 
                 let cfg = self.cfg.read().unwrap();
                 //let distance = cfg.score_for_cmp(cond.base.cmpid);
-                let distance = cfg.score_for_cmp_inp(cond.base.cmpid, cond.variables.clone());
+                let distance = cfg.score_for_cmp_inp(cond.base.cmpid, &cond.variables);
                 drop(cfg); // No need to hold the lock
                 if let Some(v) = q.get_mut(&cond) {
                     if !v.0.is_done() {
