@@ -9,6 +9,7 @@ use crate::{
 use angora_common::{config, defs, tag::TagSeg};
 
 use std::{
+    env,
     collections::HashMap,
     path::Path,
     process::{Command, Stdio},
@@ -71,6 +72,13 @@ impl Executor {
             defs::LD_LIBRARY_PATH_VAR.to_string(),
             cmd.ld_library.clone(),
         );
+        let dfsan_options = env::var(defs::DFSAN_OPTIONS_VAR);
+        if dfsan_options.is_ok() {
+            envs.insert(
+                defs::DFSAN_OPTIONS_VAR.to_string(),
+                dfsan_options.unwrap()
+            );
+        }
 
         let fd = pipe_fd::PipeFd::new(&cmd.out_file);
         let forksrv = Some(forksrv::Forksrv::new(
