@@ -210,8 +210,22 @@ impl CommandOpt {
         } else {
             self.main.0.clone()
         };
-        cmd_opt.main = (bin, main_args);
+
         let new_file =  format!("{}_{}", &self.out_file, "sanopt");
+        cmd_opt.main = (bin, vec![new_file.to_string()]);
+        if !self.is_stdin {
+            for arg in &mut cmd_opt.main.1 {
+                if arg == "@@" {
+                    *arg = new_file.clone();
+                }
+            }
+            for arg in &mut cmd_opt.track.1 {
+                if arg == "@@" {
+                    *arg = new_file.clone();
+                }
+            }
+        }
+
         let new_forksrv_socket_path = format!("{}_{}", &self.forksrv_socket_path, "sanopt");
         let new_track_path = format!("{}_{}", &cmd_opt.track_path, "sanopt");
         cmd_opt.out_file = new_file.to_owned();

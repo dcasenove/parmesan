@@ -405,8 +405,11 @@ void AngoraLLVMPass::initVariables(Module &M) {
 // Assign a random BasicBlock ID for CFG construction
 void AngoraLLVMPass::assignBasicBlockId(BasicBlock &BB, bool isFirst) {
 
-  BasicBlock::iterator IP = BB.getFirstInsertionPt();
-  IRBuilder<> IRB(&(*IP));
+  Instruction *InsertPoint = &(*(BB.getFirstInsertionPt()));
+  IRBuilder<> IRB(InsertPoint);
+
+  //BasicBlock::iterator IP = BB.getFirstInsertionPt();
+  //IRBuilder<> IRB(&(*IP));
 
   CallInst *IDLog;
   if(TrackMode){
@@ -423,6 +426,11 @@ void AngoraLLVMPass::assignBasicBlockId(BasicBlock &BB, bool isFirst) {
         CallInst *IndCallee = IRB.CreateCall(TraceIndTT, {BBCallSite, BBCallee});
         setInsNonSan(IndCallee);
     }
+    LLVMContext &C = BB.getParent()->getParent()->getContext();
+    SmallVector<Metadata *, 32> Operands;
+    Operands.push_back(llvm::ValueAsMetadata::getConstant(BBid));
+     auto *Node =  MDTuple::get(C, Operands);
+    InsertPoint->setMetadata(MetaBBId, Node);
   }
 }
 
@@ -520,21 +528,6 @@ void AngoraLLVMPass::addFnWrap(Function &F) {
 
   Value *CallSite = IRB.CreateLoad(AngoraCallSite);
   setValueNonSan(CallSite);
-
-  if(FastMode) {
-    LLVMContext &C = BB->getParent()->getParent()->getContext();
-
-    unsigned int cur_loc = getRandomBasicBlockId();
-    EdgesId[BB] = cur_loc;
-    ConstantInt *CurLoc = ConstantInt::get(Int32Ty, cur_loc);
-
-    SmallVector<Metadata *, 32> Operands;
-    Operands.push_back(llvm::ValueAsMetadata::getConstant(CurLoc));
-    auto *Node =  MDTuple::get(C, Operands);
-
-    if (Instruction *ins = dyn_cast<Instruction>(CallSite))
-        ins->setMetadata(MetaBBId, Node);
-  }
 
   Value *OriCtxVal =IRB.CreateLoad(AngoraContext);
   setValueNonSan(OriCtxVal);
@@ -1058,13 +1051,12 @@ bool AngoraLLVMPass::runOnModule(Module &M) {
         inst_list.push_back(Inst);
       }
 
+      countEdge(M, *BB);
+
       for (auto inst = inst_list.begin(); inst != inst_list.end(); inst++) {
         Instruction *Inst = *inst;
         if (Inst->getMetadata(NoSanMetaId))
           continue;
-        if (Inst == &(*BB->getFirstInsertionPt())) {
-          countEdge(M, *BB);
-        }
         if (isa<CallInst>(Inst)) {
           visitCallInst(Inst);
         } else if (isa<InvokeInst>(Inst)) {

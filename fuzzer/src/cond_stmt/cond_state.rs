@@ -123,7 +123,7 @@ impl NextState for CondStmt {
     }
 
     fn to_unsolvable(&mut self) {
-        debug!("to unsovable");
+        debug!("to unsolvable");
         self.state = CondState::Unsolvable;
     }
 

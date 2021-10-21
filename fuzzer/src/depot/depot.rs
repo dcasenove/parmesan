@@ -125,11 +125,16 @@ impl Depot {
                 let cfg = self.cfg.read().unwrap();
                 //let distance = cfg.score_for_cmp(cond.base.cmpid);
                 let mut distance = std::u32::MAX;
-                if let Some(&bbid) = cfg.get_bb_from_cmp(cond.base.cmpid) {
-                    distance = cfg.score_for_bb_inp(bbid, cond.variables.clone());
+                if !cond.base.is_afl() {
+                    if let Some(&bbid) = cfg.get_bb_from_cmp(cond.base.cmpid) {
+                        distance = cfg.score_for_bb_inp(bbid, cond.variables.clone());
+                    }
+                    else {
+                        warn!("CFG warning: cannot find bb containing cmpid {:?}", cond.base.cmpid);
+                    }
                 }
                 else {
-                    warn!("CFG warning: cannot find bb containing cmpid {:?}", cond.base.cmpid);
+                    debug!("Add Entry: CmpId {:?} refers to AFL mutator cond", cond.base.cmpid);
                 }
                 drop(cfg); // No need to hold the lock
                 if let Some(v) = q.get_mut(&cond) {
@@ -165,19 +170,24 @@ impl Depot {
                 poisoned.into_inner()
             },
         };
-        if let Some(v) = q.get_mut(&cond) {
-            v.0.clone_from(&cond);
-            let cfg = self.cfg.read().unwrap();
-            if let Some(&bbid) = cfg.get_bb_from_cmp(cond.base.cmpid) {
-                let distance = cfg.score_for_bb(bbid);
-                let p = v.1.new_distance(distance);
-                q.change_priority(&cond, p);
+        if !cond.base.is_afl() {
+            if let Some(v) = q.get_mut(&cond) {
+                v.0.clone_from(&cond);
+                let cfg = self.cfg.read().unwrap();
+                if let Some(&bbid) = cfg.get_bb_from_cmp(cond.base.cmpid) {
+                    let distance = cfg.score_for_bb(bbid);
+                    let p = v.1.new_distance(distance);
+                    q.change_priority(&cond, p);
+                }
+                else {
+                    warn!("CFG warning: cannot update entry in depot with cmpid {:?}", cond.base.cmpid);
+                }
+            } else {
+                warn!("Update entry: can not find this cond");
             }
-            else {
-                warn!("CFG warning: cannot update entry in depot with cmpid {:?}", cond.base.cmpid);
-            }
-        } else {
-            warn!("Update entry: can not find this cond");
+        }
+        else {
+            debug!("Update Entry: CmpId {:?} refers to AFL mutator cond", cond.base.cmpid);
         }
         if cond.is_discarded() {
             q.change_priority(&cond, QPriority::done());
