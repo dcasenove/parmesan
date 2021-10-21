@@ -405,8 +405,11 @@ void AngoraLLVMPass::initVariables(Module &M) {
 // Assign a random BasicBlock ID for CFG construction
 void AngoraLLVMPass::assignBasicBlockId(BasicBlock &BB, bool isFirst) {
 
-  BasicBlock::iterator IP = BB.getFirstInsertionPt();
-  IRBuilder<> IRB(&(*IP));
+  Instruction *InsertPoint = &(*(BB.getFirstInsertionPt()));
+  IRBuilder<> IRB(InsertPoint);
+
+  //BasicBlock::iterator IP = BB.getFirstInsertionPt();
+  //IRBuilder<> IRB(&(*IP));
 
   CallInst *IDLog;
   if(TrackMode){
@@ -423,6 +426,11 @@ void AngoraLLVMPass::assignBasicBlockId(BasicBlock &BB, bool isFirst) {
         CallInst *IndCallee = IRB.CreateCall(TraceIndTT, {BBCallSite, BBCallee});
         setInsNonSan(IndCallee);
     }
+    LLVMContext &C = BB.getParent()->getParent()->getContext();
+    SmallVector<Metadata *, 32> Operands;
+    Operands.push_back(llvm::ValueAsMetadata::getConstant(BBid));
+     auto *Node =  MDTuple::get(C, Operands);
+    InsertPoint->setMetadata(MetaBBId, Node);
   }
 }
 
