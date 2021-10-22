@@ -296,13 +296,25 @@ void DiffConsumer::printStatsJson(raw_ostream &out, std::ifstream &src) {
 
   out << "\"id_mapping\": {";
   first = true;
-  for (auto e: IdAssigner->getBBCmpMap()) {
+  auto e = IdAssigner->getBBCmpMap();
+  auto same_bb = e.equal_range(0);
+  for(auto i = e.begin(); i != e.end(); i = same_bb.second) {
       if (first) {
           first = false;
       } else {
         out << ", ";
       }
-      out << "\"" << e.first << "\"" << ": " << e.second;
+      out << "\"" << i->first << "\"" << ": [";
+      same_bb = e.equal_range(i->first);
+      bool first_inner = true;
+      for (auto cmpid = same_bb.first; cmpid != same_bb.second; cmpid++) {
+        if (first_inner)
+            first_inner = false;
+        else
+            out << ", ";
+          out << cmpid->second;
+      }
+      out << "]";
   }
   out << "},\n";
 
