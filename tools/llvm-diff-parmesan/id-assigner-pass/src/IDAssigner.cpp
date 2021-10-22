@@ -204,12 +204,30 @@ bool IDAssigner::runOnModule(Module &M) {
                         IdToAngoraMap[bb_id] = cmpId;
                       }
 
-                      // Get the parent of this block (the original block containint the CMP
-                      BbIdToCmpId[IdMap[callInst->getParent()->getSinglePredecessor()]] = cmpId;
-
                       // Store Angora CMP to BB id mapping
                       CmpMap[cmpId] = cmpBbSet;
                       cmpBbSet = std::set<IDAssigner::IdentifierType>();
+
+                      // Get the parent of this block (the original block contains the CMP
+                      if(IdMap[callInst->getParent()->getSinglePredecessor()] != 0) {
+                          BbIdToCmpId.insert(std::pair<IdentifierType, CmpIdType>(IdMap[callInst->getParent()->getSinglePredecessor()], cmpId));
+                      }
+                      // Parent of this block has no ID and is angora instrumentation
+                      // https://lists.llvm.org/pipermail/llvm-dev/2008-January/012238.html
+                      else {
+                          for (idf_iterator<BasicBlock*> I=idf_begin(callInst->getParent()->getSinglePredecessor()),
+                              E=idf_end(callInst->getParent()->getSinglePredecessor()); I != E; ++I) {
+                              BasicBlock* pred = *I;
+                              if(IdMap[pred] != 0) {
+                                  BbIdToCmpId.insert(std::pair<IdentifierType, CmpIdType>(IdMap[pred], cmpId));
+
+                                  // Trick the llvm-diff to look for predecessor cmpids when doing the diff
+                                  IdMap[callInst->getParent()->getSinglePredecessor()] = IdMap[pred];
+                                  CmpMap[cmpId] = CmpMap[IdToAngoraMap[IdMap[pred]]];
+                                  break;
+                              }
+                        }
+                    }
                   }
               }
           }
@@ -400,7 +418,7 @@ const IDAssigner::CmpsCfg IDAssigner::getCmpCfg() const {
   return result;
 }
 
-const IDAssigner::IdAngoraMap IDAssigner::getBBCmpMap() const {
+const IDAssigner::BbCmpMap IDAssigner::getBBCmpMap() const {
   return BbIdToCmpId;
 }
 
