@@ -148,7 +148,7 @@ impl ControlFlowGraph {
     pub fn get_bb_from_cmp(&self, cmp: CmpId) -> Option<&BbId> {
         for (bb, cmp_set) in &self.id_mapping {
             if cmp_set.contains(&cmp) {
-                Some(bb);
+                return Some(bb);
             }
         }
         None
