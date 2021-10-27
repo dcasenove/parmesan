@@ -30,6 +30,7 @@ pub struct ControlFlowGraph {
     callsite_dominators: HashMap<CallSiteId, HashSet<CmpId>>,
     dominator_cmps: HashSet<CmpId>,
     magic_bytes: HashMap<Edge, FixedBytes>,
+    ind_mapping: HashMap<Edge, Edge>,
 }
 
 
@@ -52,6 +53,7 @@ impl ControlFlowGraph {
             callsite_dominators: data.callsite_dominators,
             dominator_cmps,
             magic_bytes: HashMap::new(),
+            ind_mapping: HashMap::new(),
         };
 
         for e in data.edges {
@@ -75,6 +77,7 @@ impl ControlFlowGraph {
             callsite_dominators: HashMap::new(),
             dominator_cmps: HashSet::new(),
             magic_bytes: HashMap::new(),
+            ind_mapping: HashMap::new(),
         };
 
         result
@@ -113,6 +116,15 @@ impl ControlFlowGraph {
             return fixed.clone();
         }
         return vec![];
+    }
+
+    pub fn set_ind_mapping(&mut self, bbid_edge: Edge, cmpid_edge: Edge) {
+        self.ind_mapping.insert(bbid_edge, cmpid_edge);
+        return;
+    }
+
+    fn get_ind_mapping(&self, edge: Edge) -> Option<&Edge> {
+        return self.ind_mapping.get(&edge);
     }
 
     pub fn dominates_indirect_call(&self, cmp: CmpId) -> bool{
@@ -331,18 +343,21 @@ impl ControlFlowGraph {
         if !self.indirect_edges.contains(&edge) {
             return true;
         }
-
-        if let Some(fixed) = self.magic_bytes.get(&edge) {
-            let mut equal = true;
-            for (i, v) in fixed {
-                if let Some(b) = inp.get(*i) {
-                    if *b != *v {
-                        equal = false;
-                        break;
-                    }
-                } 
+        // let cmp_edge = self.get_ind_mapping(edge);
+        if let Some(cmp_edge) = self.get_ind_mapping(edge) {
+            info!("BB_EDGE: {:?} | CMP_EDGE: {:?}", edge, cmp_edge);
+            if let Some(fixed) = self.magic_bytes.get(&cmp_edge) {
+                let mut equal = true;
+                for (i, v) in fixed {
+                    if let Some(b) = inp.get(*i) {
+                        if *b != *v {
+                            equal = false;
+                            break;
+                        }
+                    } 
+                }
+                return equal;
             }
-            return equal;
         }
 
         true
@@ -370,6 +385,7 @@ mod tests {
             callsite_dominators: HashMap::new(),
             dominator_cmps: HashSet::new(),
             magic_bytes: HashMap::new(),
+            ind_mapping: HashMap::new(),
         };
 
         result

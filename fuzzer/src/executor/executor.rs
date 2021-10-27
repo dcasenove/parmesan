@@ -401,6 +401,8 @@ impl Executor {
             dyncfg.set_edge_indirect(t, t.0);
         }
 
+        let mut num_ind_edge = 0;
+
         for (a,b) in cond_list.clone().into_iter().tuple_windows() {
             let mut dyncfg = self.depot.cfg.write().unwrap();
             let edge = (a.base.cmpid, b.base.cmpid);
@@ -423,6 +425,9 @@ impl Executor {
                     }
                 }
                 dyncfg.set_magic_bytes(edge, &buf, &fixed_offsets);
+                // Set the bbid to cmpid in the mapping to look it back up later
+                let bbid_edge = ind_edges_list[num_ind_edge];
+                dyncfg.set_ind_mapping(bbid_edge, edge);
 
 
                 // Set offsets
@@ -436,6 +441,7 @@ impl Executor {
                     }
                 }
                 ind_cond_list.push(fixed_cond);
+                num_ind_edge += 1;
             }
 
             
