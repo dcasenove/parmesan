@@ -126,7 +126,7 @@ impl Depot {
                 //let distance = cfg.score_for_cmp(cond.base.cmpid);
                 let mut distance = std::u32::MAX;
                 if !cond.base.is_afl() {
-                    if let Some(&bbid) = cfg.get_bb_from_cmp(cond.base.cmpid) {
+                    if let Some(&bbid) = cfg.get_bb_from_cmp(&cond.base.cmpid) {
                         distance = cfg.score_for_bb_inp(bbid, cond.variables.clone());
                     }
                     else {
@@ -174,7 +174,7 @@ impl Depot {
             if let Some(v) = q.get_mut(&cond) {
                 v.0.clone_from(&cond);
                 let cfg = self.cfg.read().unwrap();
-                if let Some(&bbid) = cfg.get_bb_from_cmp(cond.base.cmpid) {
+                if let Some(&bbid) = cfg.get_bb_from_cmp(&cond.base.cmpid) {
                     let distance = cfg.score_for_bb(bbid);
                     let p = v.1.new_distance(distance);
                     q.change_priority(&cond, p);

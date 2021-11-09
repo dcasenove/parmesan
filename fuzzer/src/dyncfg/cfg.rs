@@ -55,8 +55,9 @@ impl ControlFlowGraph {
         };
 
         for e in data.edges {
-            result.add_edge(e);
+            result.init_add_edge(e);
         }
+        result.init_prop_targets();
 
         info!("INIT CFG: dominators: {:?}", result.dominator_cmps);
         info!("INIT ID mapping: {:?}", result.id_mapping);
@@ -86,6 +87,29 @@ impl ControlFlowGraph {
         self.handle_new_edge(edge);
         debug!("Added CFG edge {:?} {}", edge, self.targets.contains(&edge.1));
         result
+    }
+
+    fn init_add_edge(&mut self, edge: Edge) {
+        let (src, dst) = edge;
+        let init_score = UNDEF_SCORE;
+        self.graph.add_edge(src, dst, init_score);
+
+        if let Some(cmp_set) = &self.id_mapping.get(&src) {
+            for cmp in *cmp_set {
+                if self.targets.contains(&cmp) {
+                    self.graph.add_edge(src, dst, TARGET_SCORE);
+                }
+            }
+        }
+    }
+
+    fn init_prop_targets(&mut self) {
+        // should be possible without cloning
+        for target in &self.targets.clone() {
+            if let Some(&bb) = self.get_bb_from_cmp(&target) {
+                self.propagate_score(bb);
+            }
+        }
     }
 
     pub fn set_edge_indirect(&mut self, edge: Edge, callsite: CallSiteId) {
@@ -131,7 +155,7 @@ impl ControlFlowGraph {
 
     pub fn remove_target(&mut self, cmp: CmpId) {
         if self.targets.remove(&cmp) {
-            if let Some(&bb) = self.get_bb_from_cmp(cmp) {
+            if let Some(&bb) = self.get_bb_from_cmp(&cmp) {
                 self.propagate_score(bb);
             }
             else {
@@ -145,9 +169,9 @@ impl ControlFlowGraph {
         self.targets.contains(&cmp) || self.solved_targets.contains(&cmp)
     }
 
-    pub fn get_bb_from_cmp(&self, cmp: CmpId) -> Option<&BbId> {
+    pub fn get_bb_from_cmp(&self, cmp: &CmpId) -> Option<&BbId> {
         for (bb, cmp_set) in &self.id_mapping {
-            if cmp_set.contains(&cmp) {
+            if cmp_set.contains(cmp) {
                 return Some(bb);
             }
         }
@@ -268,7 +292,7 @@ impl ControlFlowGraph {
     }
 
     pub fn has_path_to_target(&self, cmp: CmpId) -> bool {
-        if let Some(&bb) = self.get_bb_from_cmp(cmp) {
+        if let Some(&bb) = self.get_bb_from_cmp(&cmp) {
             return self.has_path_to_target_bb(bb);
         }
         false
@@ -399,8 +423,9 @@ mod tests {
 
         // Test adding BBId edges
         for e in edges.clone() {
-            cfg.add_edge(e);
+            cfg.init_add_edge(e);
         }
+        cfg.init_prop_targets();
         for e in edges.clone() {
             let (from, to) = e;
             println!("weight for ({:?}, {:?}): {:?}", from, to, cfg.graph.edge_weight(from, to))
@@ -420,8 +445,9 @@ mod tests {
 
         // Test adding BBId edges
         for e in edges.clone() {
-            cfg.add_edge(e);
+            cfg.init_add_edge(e);
         }
+        cfg.init_prop_targets();
         for e in edges.clone() {
             let (from, to) = e;
             println!("weight for ({:?}, {:?}): {:?}", from, to, cfg.graph.edge_weight(from, to))
@@ -449,8 +475,9 @@ mod tests {
         
         let now = Instant::now();
         for e in edges.clone() {
-            cfg.add_edge(e);
+            cfg.init_add_edge(e);
         }
+        cfg.init_prop_targets();
         println!("total time: {}", now.elapsed().as_micros());
     }
 
@@ -468,8 +495,9 @@ mod tests {
 
         // Adding BBId edges
         for e in edges.clone() {
-            cfg.add_edge(e);
+            cfg.init_add_edge(e);
         }
+        cfg.init_prop_targets();
 
         // Test path to target
         assert_eq!(cfg.has_path_to_target_bb(0), true);
