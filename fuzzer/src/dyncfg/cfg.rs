@@ -24,6 +24,7 @@ pub struct ControlFlowGraph {
     graph: DiGraphMap<BbId, Score>,
     targets: HashSet<CmpId>,
     id_mapping: HashMap<BbId, HashSet<CmpId>>,
+    reverse_id_mapping: HashMap<CmpId, BbId>,
     solved_targets: HashSet<CmpId>,
     indirect_edges: HashSet<Edge>,
     callsite_edges: HashMap<CallSiteId, HashSet<Edge>>,
@@ -45,7 +46,8 @@ impl ControlFlowGraph {
         let mut result = ControlFlowGraph {
             graph: DiGraphMap::new(),
             targets: data.targets,
-            id_mapping: data.id_mapping,
+            id_mapping: data.id_mapping.clone(),
+            reverse_id_mapping: Self::reverse_id_mapping(data.id_mapping),
             solved_targets: HashSet::new(),
             indirect_edges: HashSet::new(),
             callsite_edges: HashMap::new(),
@@ -70,6 +72,7 @@ impl ControlFlowGraph {
             graph: DiGraphMap::new(),
             targets: HashSet::new(),
             id_mapping: HashMap::new(),
+            reverse_id_mapping: HashMap::new(),
             solved_targets: HashSet::new(),
             indirect_edges: HashSet::new(),
             callsite_edges: HashMap::new(),
@@ -170,12 +173,7 @@ impl ControlFlowGraph {
     }
 
     pub fn get_bb_from_cmp(&self, cmp: &CmpId) -> Option<&BbId> {
-        for (bb, cmp_set) in &self.id_mapping {
-            if cmp_set.contains(cmp) {
-                return Some(bb);
-            }
-        }
-        None
+        return self.reverse_id_mapping.get(cmp);
     }
 
     fn handle_new_edge(&mut self, edge: Edge) {
@@ -242,6 +240,16 @@ impl ControlFlowGraph {
             return true;
         } 
         false
+    }
+
+    fn reverse_id_mapping(id_mapping: HashMap<BbId, HashSet<CmpId>>) -> HashMap<CmpId, BbId> {
+        let mut rev_mapping = HashMap::new();
+        for (bbid, cmp_set) in id_mapping.iter() {
+            for cmp in cmp_set {
+                rev_mapping.insert(*cmp, *bbid);
+            }
+        }
+        return rev_mapping;
     }
 
     fn aggregate_score(ovals: Vec<Score>) -> Score {
@@ -387,7 +395,8 @@ mod tests {
         let result = ControlFlowGraph {
             graph: DiGraphMap::new(),
             targets: targets,
-            id_mapping: id_mapping,
+            id_mapping: id_mapping.clone(),
+            reverse_id_mapping: ControlFlowGraph::reverse_id_mapping(id_mapping),
             solved_targets: HashSet::new(),
             indirect_edges: HashSet::new(),
             callsite_edges: HashMap::new(),
@@ -438,7 +447,7 @@ mod tests {
         let target_vec = vec![1700];
         let targets = HashSet::from_iter(target_vec.iter().cloned());
 
-        let id_mapping: HashMap<BbId, HashSet<CmpId>> = [(10, vec![1000].into_iter().collect()), (20, vec![1100].into_iter().collect()), (50, vec![1200].into_iter().collect()), (60, vec![1300].into_iter().collect()), (140, vec![1400].into_iter().collect()), (160, vec![1500].into_iter().collect()), (100, vec![1600].into_iter().collect()), (180, vec![1700].into_iter().collect())].iter().cloned().collect();
+        let id_mapping: HashMap<BbId, HashSet<CmpId>> = [(10, vec![1000].into_iter().collect()), (20, vec![1100].into_iter().collect()), (50, vec![1200].into_iter().collect()), (60, vec![1300].into_iter().collect()), (140, vec![1400].into_iter().collect()), (160, vec![1500].into_iter().collect()), (100, vec![1600].into_iter().collect()), (180, vec![1700, 1800].into_iter().collect())].iter().cloned().collect();
 
         let mut cfg = test_new(targets, id_mapping);
         let edges = vec![(0,10), (10, 20), (20,30), (30,50), (50,60), (60,130), (60,140), (140,150), (140,160), (160,170), (160,180), (50,70), (20,40), (40,80), (10,90), (90,100), (100,110), (100,120)];
