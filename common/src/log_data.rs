@@ -5,6 +5,7 @@ use std::collections::HashMap;
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub struct LogData {
     pub cond_list: Vec<CondStmtBase>,
+    pub untainted_cond_list: Vec<CondStmtBase>,
     pub ind_edges: Vec<(u32,u32)>,
     pub tags: HashMap<u32, Vec<TagSeg>>,
     pub magic_bytes: HashMap<usize, (Vec<u8>, Vec<u8>)>,
@@ -14,6 +15,7 @@ impl LogData {
     pub fn new() -> Self {
         Self {
             cond_list: vec![],
+            untainted_cond_list: vec![],
             ind_edges: vec![],
             tags: HashMap::new(),
             magic_bytes: HashMap::new(),

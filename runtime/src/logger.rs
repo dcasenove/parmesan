@@ -1,5 +1,5 @@
 use bincode::{deserialize_from, serialize_into};
-use std::{collections::HashMap, env, fs, io, path::Path};
+use std::{collections::HashMap, env, fs, io, path::Path, vec::Vec};
 
 use crate::{len_label, tag_set_wrap};
 use angora_common::{cond_stmt_base::CondStmtBase, config, defs, log_data::LogData};
@@ -8,6 +8,7 @@ use angora_common::{cond_stmt_base::CondStmtBase, config, defs, log_data::LogDat
 pub struct Logger {
     data: LogData,
     fd: Option<fs::File>,
+    paths: Vec<u32>,
     order_map: HashMap<(u32, u32), u32>,
 }
 
@@ -22,9 +23,20 @@ impl Logger {
             Err(_) => None,
         };
 
+        let npaths = match env::var(defs::NPATHS){
+            Ok(npaths) => npaths.parse().unwrap(),
+            Err(_) => 0,
+        };
+        let mut paths: Vec<u32> = Vec::new();
+        for i in 0..npaths {
+            let mut path = env::var(["PATH_TO_TARGET".to_string(), i.to_string()].join(" ").to_string()).unwrap();
+            paths.append(&mut path.split_whitespace().map(|s| s.parse().expect("parse error")).collect::<Vec<u32>>());
+        }
+
         Self {
             data: LogData::new(),
             fd,
+            paths,
             order_map: HashMap::new(),
         }
     }
@@ -82,6 +94,12 @@ impl Logger {
                 c.order = 0x10000 + order; // avoid the same as cond;
                 self.data.cond_list.push(c);
             }
+        }
+    }
+
+    pub fn untainted_save(&mut self, cond: CondStmtBase) {
+        if self.paths.contains(&cond.cmpid) {
+            self.data.untainted_cond_list.push(cond);
         }
     }
 

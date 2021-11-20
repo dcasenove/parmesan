@@ -1,6 +1,8 @@
 use std::f64;
 use math::mean;
 use petgraph::graphmap::DiGraphMap;
+use petgraph::algo;
+use petgraph::*;
 use std::collections::{HashSet, HashMap};
 use std::time::Instant;
 use petgraph::visit::{Reversed, Bfs, Dfs};
@@ -380,6 +382,37 @@ impl ControlFlowGraph {
         true
     }
 
+    pub fn has_path_to_target_dump(&self, src: CmpId, dst: CmpId) -> (bool, Vec<u32>) {
+        let mut dfs = Dfs::new(&self.graph, src);
+        let mut path = vec![];
+        while let Some(visited) = dfs.next(&self.graph) {
+            path.push(visited);
+            if visited == dst {
+                return (true, path);
+            }
+        }
+        return (false, vec![]);
+    }
+
+    pub fn get_paths(&self, cmp: CmpId) -> Vec<String>{
+        let mut paths = Vec::new();
+
+        if let Some(src) = self.get_bb_from_cmp(&cmp) {
+            for target in self.targets.clone() {
+                if let Some(dst) = self.get_bb_from_cmp(&target) {
+                    let mut v: Vec<i32> = Vec::new();
+                    let (has_path, ways) = self.has_path_to_target_dump(*src, *dst);
+
+                    if (has_path) {
+                        let path = ways.into_iter().map(|x| x.to_string()).collect::<Vec<_>>().join(",");
+                        info!("From Cmpid {:?} TargetCmp {:?} BBFrom {:?} BBTo {:?} Path {:?}", cmp, target, *src, *dst, path);
+                        paths.push(path)
+                    }
+                }
+            }
+        }
+        paths
+    }
   
 }
 

@@ -66,6 +66,26 @@ pub extern "C" fn __dfsw___angora_trace_cmp_tt(
     let lb1 = l4;
     let lb2 = l5;
     if lb1 == 0 && lb2 == 0 {
+        let mut lcl = LC.lock().expect("Could not lock LC.");
+        let cond = CondStmtBase {
+            cmpid,
+            context,
+            last_callsite,
+            order: 0,
+            belong: 0,
+            condition,
+            level: 0,
+            op,
+            size,
+            lb1,
+            lb2,
+            arg1,
+            arg2,
+        };
+
+        if let Some(ref mut lc) = *lcl {
+            lc.untainted_save(cond);
+        }
         return;
     }
 

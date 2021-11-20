@@ -10,6 +10,7 @@ use std::{collections::HashMap, io, path::Path};
 
 pub struct Parsed {
     pub conds: Vec<CondStmt>,
+    pub untainted_conds: Vec<CondStmt>,
     pub indirect_edges: Vec<(u32, u32)>,
 }
 
@@ -45,6 +46,12 @@ pub fn read_and_parse(
         cond_list.push(cond);
     }
 
+    let mut untainted_cond_list: Vec<CondStmt> = Vec::new();
+    for u_cond_base in log_data.untainted_cond_list.iter() {
+        let mut u_cond = CondStmt::from(*u_cond_base);
+        untainted_cond_list.push(u_cond);
+    }
+
     let mut ind_edges_list: Vec<(u32, u32)> = Vec::new();
     for ind_base in log_data.ind_edges.iter(){
         let ind_tuple = (u32::from(ind_base.0), u32::from(ind_base.1));
@@ -53,6 +60,7 @@ pub fn read_and_parse(
 
     let p = Parsed {
         conds: cond_list,
+        untainted_conds: untainted_cond_list,
         indirect_edges: ind_edges_list,
     };
 
@@ -97,19 +105,21 @@ pub fn load_track_data(
     speed: u32,
     is_pin_mode: bool,
     enable_exploitation: bool,
-) -> (Vec<CondStmt>, Vec<(u32, u32)>) {
+) -> (Vec<CondStmt>, Vec<CondStmt>, Vec<(u32, u32)>) {
     let parsed_data = match read_and_parse(out_f, is_pin_mode, enable_exploitation) {
         Result::Ok(val) => val,
         Result::Err(err) => {
             error!("parse track file error!! {:?}", err);
             Parsed{
                 conds: vec![],
+                untainted_conds: vec![],
                 indirect_edges: vec![],
             }
         }
     };
 
     let mut cond_list = parsed_data.conds;
+    let mut ucond_list = parsed_data.untainted_conds;
     let indirect_edges_list = parsed_data.indirect_edges;
 
     for cond in cond_list.iter_mut() {
@@ -122,5 +132,5 @@ pub fn load_track_data(
 
     filter::filter_cond_list(&mut cond_list);
 
-    (cond_list, indirect_edges_list)
+    (cond_list, ucond_list, indirect_edges_list)
 }

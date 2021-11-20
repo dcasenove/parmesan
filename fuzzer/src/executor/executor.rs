@@ -72,6 +72,10 @@ impl Executor {
             defs::LD_LIBRARY_PATH_VAR.to_string(),
             cmd.ld_library.clone(),
         );
+        envs.insert(
+            defs::NPATHS.to_string(),
+            "0".to_string(),
+        );
         let dfsan_options = env::var(defs::DFSAN_OPTIONS_VAR);
         if dfsan_options.is_ok() {
             envs.insert(
@@ -264,7 +268,8 @@ impl Executor {
                 }
                 let crash_or_tmout = self.try_unlimited_memory(buf, cmpid);
                 if !crash_or_tmout {
-                    let cond_stmts = self.track(id, buf, speed);
+                    let p = self.depot.cfg.write().unwrap().get_paths(cmpid);
+                    let cond_stmts = self.track(id, buf, speed, p);
                     if cond_stmts.len() > 0 {
                         self.depot.add_entries(cond_stmts);
                         if self.cmd.enable_afl {
@@ -355,11 +360,29 @@ impl Executor {
         used_us / 3
     }
 
-    fn track(&mut self, id: usize, buf: &Vec<u8>, speed: u32) -> Vec<cond_stmt::CondStmt> {
+    fn track(&mut self, id: usize, buf: &Vec<u8>, speed: u32, paths: Vec<String>) -> Vec<cond_stmt::CondStmt> {
         self.envs.insert(
             defs::TRACK_OUTPUT_VAR.to_string(),
             self.cmd.track_path.clone(),
         );
+
+       let to_remove = self.envs.get(defs::NPATHS).unwrap();
+
+        for i in 0..to_remove.parse().unwrap() {
+            self.envs.remove(&["PATH_TO_TARGET".to_string(), i.to_string()].join(" ").to_string());
+        }
+
+        self.envs.insert(
+            defs::NPATHS.to_string(),
+            paths.len().to_string(),
+        );
+
+        for (i, path) in paths.iter().enumerate() {
+            self.envs.insert(
+            ["PATH_TO_TARGET".to_string(), i.to_string()].join(" ").to_string(),
+            path.clone(),
+        );
+        }
 
         let t_now: stats::TimeIns = Default::default();
 
@@ -382,7 +405,7 @@ impl Executor {
             return vec![];
         }
 
-        let (mut cond_list, ind_edges_list) = track::load_track_data(
+        let (mut cond_list, mut ucond_list, ind_edges_list) = track::load_track_data(
             Path::new(&self.cmd.track_path),
             id as u32,
             speed,
