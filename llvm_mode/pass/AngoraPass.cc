@@ -66,6 +66,7 @@ public:
   std::string ModName;
   u32 ModId;
   u32 CidCounter;
+  u32 BbIdCounter;
   unsigned long int RandSeed = 1;
   bool is_bc;
   unsigned int inst_ratio = 100;
@@ -79,6 +80,7 @@ public:
   // Configurations
   bool gen_id_random;
   bool output_cond_loc;
+  bool bb_id_values;
   int num_fn_ctx;
 
   MDNode *ColdCallWeights;
@@ -135,6 +137,7 @@ public:
   void setRandomNumSeed(u32 seed);
   u32 getRandomContextId();
   u32 getRandomInstructionId();
+  u32 getBasicBlockId();
   void setValueNonSan(Value *v);
   void setInsNonSan(Instruction *v);
   Value *castArgType(IRBuilder<> &IRB, Value *V);
@@ -181,6 +184,10 @@ u32 AngoraLLVMPass::getRandomContextId() {
     errs() << "[CONTEXT] " << context << "\n";
   }
   return context;
+}
+
+u32 AngoraLLVMPass::getBasicBlockId() {
+    return ++BbIdCounter;
 }
 
 u32 AngoraLLVMPass::getRandomInstructionId() { return getRandomNum(); }
@@ -259,7 +266,7 @@ void AngoraLLVMPass::initVariables(Module &M) {
   srandom(ModId);
   setRandomNumSeed(ModId);
   CidCounter = 0;
-
+  BbIdCounter = 0;
   LLVMContext &C = M.getContext();
   VoidTy = Type::getVoidTy(C);
   Int1Ty = IntegerType::getInt1Ty(C);
@@ -374,6 +381,7 @@ void AngoraLLVMPass::initVariables(Module &M) {
 
   gen_id_random = !!getenv(GEN_ID_RANDOM_VAR);
   output_cond_loc = !!getenv(OUTPUT_COND_LOC_VAR);
+  bb_id_values = !!getenv(OUTPUT_BBID_VAR);
 
   num_fn_ctx = -1;
   char* custom_fn_ctx = getenv(CUSTOM_FN_CTX);
@@ -400,24 +408,44 @@ void AngoraLLVMPass::initVariables(Module &M) {
   if (output_cond_loc) {
     errs() << "Output cond log\n";
   }
+
+  if (bb_id_values) {
+    errs() << "Output bb ids\n";
+  }
 };
 
 // Assign a random BasicBlock ID for CFG construction
 void AngoraLLVMPass::assignBasicBlockId(BasicBlock &BB, bool isFirst) {
 
-  Instruction *InsertPoint = &(*(BB.getFirstInsertionPt()));
-  IRBuilder<> IRB(InsertPoint);
+  // Fetch and assign a BasicBlock ID
+  unsigned int id = getBasicBlockId();
+  EdgesId[&BB] = id;
 
-  //BasicBlock::iterator IP = BB.getFirstInsertionPt();
-  //IRBuilder<> IRB(&(*IP));
+  if(bb_id_values) {
+    errs() << "Basic Block " << BB << " with ID " << id << "\n";
+  }
+
+  // Prepare BasicBlock ID metadata
+  LLVMContext &C = BB.getParent()->getParent()->getContext();
+  Constant *BBid = ConstantInt::get(Int32Ty, id);
+  SmallVector<Metadata *, 32> Operands;
+  Operands.push_back(llvm::ValueAsMetadata::getConstant(BBid));
+  auto *Node =  MDTuple::get(C, Operands);
+
+  // Add metadata info to all instructions in the Basic Block
+  for (auto inst = BB.begin(); inst != BB.end(); inst++) {
+    if(!inst->getName().compare(StringRef("__unfold_branch_fn"))) {
+        continue;
+    }
+    Instruction *Inst = &(*inst);
+    Inst->setMetadata(MetaBBId, Node);
+  }
 
   CallInst *IDLog;
   if(TrackMode){
-    // Fetch a random ID
-    unsigned int random_id = getRandomBasicBlockId();
-    Constant *BBid = ConstantInt::get(Int32Ty, random_id);
+    BasicBlock::iterator IP = BB.getFirstInsertionPt();
+    IRBuilder<> IRB(&(*IP));
 
-    EdgesId[&BB] = random_id;
     if(isFirst) {
         Value *BBCallSite = IRB.CreateLoad(ParmeSanIndCallSite);
         setValueNonSan(BBCallSite);
@@ -426,35 +454,24 @@ void AngoraLLVMPass::assignBasicBlockId(BasicBlock &BB, bool isFirst) {
         CallInst *IndCallee = IRB.CreateCall(TraceIndTT, {BBCallSite, BBCallee});
         setInsNonSan(IndCallee);
     }
-    LLVMContext &C = BB.getParent()->getParent()->getContext();
-    SmallVector<Metadata *, 32> Operands;
-    Operands.push_back(llvm::ValueAsMetadata::getConstant(BBid));
-     auto *Node =  MDTuple::get(C, Operands);
-    InsertPoint->setMetadata(MetaBBId, Node);
   }
 }
 
 // Coverage statistics: AFL's Branch count
 // Angora enable function-call context.
 void AngoraLLVMPass::countEdge(Module &M, BasicBlock &BB) {
-  if (!FastMode)
+  if (!FastMode || skipBasicBlock())
     return;
 
-  LLVMContext &C = M.getContext();
+  //LLVMContext &C = M.getContext();
   unsigned int cur_loc = getRandomBasicBlockId();
-  EdgesId[&BB] = cur_loc;
   ConstantInt *CurLoc = ConstantInt::get(Int32Ty, cur_loc);
-
-  SmallVector<Metadata *, 32> Operands;
-  Operands.push_back(llvm::ValueAsMetadata::getConstant(CurLoc));
-  auto *Node =  MDTuple::get(C, Operands);
 
   BasicBlock::iterator IP = BB.getFirstInsertionPt();
   IRBuilder<> IRB(&(*IP));
 
   LoadInst *PrevLoc = IRB.CreateLoad(AngoraPrevLoc);
   setInsNonSan(PrevLoc);
-  PrevLoc->setMetadata(MetaBBId, Node);
 
   Value *PrevLocCasted = IRB.CreateZExt(PrevLoc, Int32Ty);
   setValueNonSan(PrevLocCasted);
@@ -1051,12 +1068,13 @@ bool AngoraLLVMPass::runOnModule(Module &M) {
         inst_list.push_back(Inst);
       }
 
-      countEdge(M, *BB);
-
       for (auto inst = inst_list.begin(); inst != inst_list.end(); inst++) {
         Instruction *Inst = *inst;
         if (Inst->getMetadata(NoSanMetaId))
           continue;
+        if (Inst == &(*BB->getFirstInsertionPt())) {
+          countEdge(M, *BB);
+        }
         if (isa<CallInst>(Inst)) {
           visitCallInst(Inst);
         } else if (isa<InvokeInst>(Inst)) {

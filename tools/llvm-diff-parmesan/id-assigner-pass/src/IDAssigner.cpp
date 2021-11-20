@@ -140,13 +140,14 @@ IDAssigner::CmpIdType IDAssigner::getAngoraCmpIdForBB(BasicBlock *BB) {
 }
 
 void IDAssigner::collectBasicBlockId(BasicBlock *BB) {
-    auto *Instr = BB->getFirstNonPHI();
-    MDNode *MD = Instr->getMetadata("bbid");
-    if(MD) {
-        ValueAsMetadata *ValueId = dyn_cast<ValueAsMetadata>(MD->getOperand(0));
-        ConstantInt *Id = dyn_cast<ConstantInt>(ValueId->getValue());
-        IdMap[BB] = Id->getZExtValue();
-      }
+    for(auto &I : *BB) {
+        MDNode *MD = I.getMetadata("bbid");
+        if(MD) {
+            ValueAsMetadata *ValueId = dyn_cast<ValueAsMetadata>(MD->getOperand(0));
+            ConstantInt *Id = dyn_cast<ConstantInt>(ValueId->getValue());
+            IdMap[BB] = Id->getZExtValue();
+        }
+    }
 }
 
 bool IDAssigner::runOnModule(Module &M) {
@@ -177,7 +178,9 @@ bool IDAssigner::runOnModule(Module &M) {
           auto dstId = IdMap[&*Succ];
           CfgEdges.insert({srcId, dstId});
       }
-      cmpBbSet.insert(srcId);
+      if(IdToAngoraMap[srcId] == 0) {
+        cmpBbSet.insert(srcId);
+      }
       for (auto &I : BB) {
           if (CallInst *callInst = dyn_cast<CallInst>(&I)) {
               if (Function *calledFunction = callInst->getCalledFunction()) {
