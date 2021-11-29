@@ -386,7 +386,11 @@ impl ControlFlowGraph {
         let mut dfs = Dfs::new(&self.graph, src);
         let mut path = vec![];
         while let Some(visited) = dfs.next(&self.graph) {
-            path.push(visited);
+            if let Some(cmp_set) = &self.id_mapping.get(&visited) {
+                for cmp in *cmp_set {
+                    path.push(*cmp);
+                }
+            }
             if visited == dst {
                 return (true, path);
             }
@@ -404,7 +408,7 @@ impl ControlFlowGraph {
                     let (has_path, ways) = self.has_path_to_target_dump(*src, *dst);
 
                     if (has_path) {
-                        let path = ways.into_iter().map(|x| x.to_string()).collect::<Vec<_>>().join(",");
+                        let path = ways.into_iter().map(|x| x.to_string()).collect::<Vec<_>>().join(" ");
                         info!("From Cmpid {:?} TargetCmp {:?} BBFrom {:?} BBTo {:?} Path {:?}", cmp, target, *src, *dst, path);
                         paths.push(path)
                     }

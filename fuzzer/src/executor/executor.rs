@@ -474,6 +474,18 @@ impl Executor {
 
         // Add fixed conds to result
         cond_list.append(&mut ind_cond_list);
+        let mut ulist = vec![];
+
+        for not_tainted in ucond_list {
+            let dyncfg = self.depot.cfg.read().unwrap();
+            let mut distance = std::u32::MAX;
+            if let Some(&bbid) = dyncfg.get_bb_from_cmp(&not_tainted.base.cmpid) {
+                distance = dyncfg.score_for_bb_inp(bbid, not_tainted.variables.clone());
+            }
+            if(distance != std::u32::MAX ) {
+                ulist.push(not_tainted);
+            }
+        }
 
         // if fuzzer is directed mode, retain only if there is path to target
         if self.is_directed {
@@ -507,7 +519,7 @@ impl Executor {
         let mut child = cmd
             .args(&target.1)
             .stdin(Stdio::null())
-            .env_clear()
+             //.env_clear()
             .envs(&self.envs)
             .stdout(Stdio::null())
             .stderr(Stdio::null())

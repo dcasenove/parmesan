@@ -130,6 +130,11 @@ pub fn load_track_data(
         }
     }
 
+    for cond in ucond_list.iter_mut() {
+        cond.base.belong = id;
+        cond.speed = speed;
+    }
+
     filter::filter_cond_list(&mut cond_list);
 
     (cond_list, ucond_list, indirect_edges_list)
