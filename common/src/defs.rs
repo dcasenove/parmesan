@@ -15,6 +15,7 @@ pub static ASAN_OPTIONS_CONTENT: &str =
 pub const MSAN_ERROR_CODE: i32 = 86;
 pub static MSAN_OPTIONS_CONTENT: &str =
     "exit_code=86:symbolize=0:abort_on_error=1:allocator_may_return_null=1:msan_track_origins=0";
+pub static DFSAN_OPTIONS_VAR: &str = "DFSAN_OPTIONS";
 
 // depot.rs
 pub static CRASHES_DIR: &str = "crashes";

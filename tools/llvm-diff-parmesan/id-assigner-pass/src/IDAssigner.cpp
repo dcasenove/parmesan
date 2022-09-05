@@ -139,24 +139,37 @@ IDAssigner::CmpIdType IDAssigner::getAngoraCmpIdForBB(BasicBlock *BB) {
     return result;
 }
 
+void IDAssigner::collectBasicBlockId(BasicBlock *BB) {
+    for(auto &I : *BB) {
+        MDNode *MD = I.getMetadata("bbid");
+        if(MD) {
+            ValueAsMetadata *ValueId = dyn_cast<ValueAsMetadata>(MD->getOperand(0));
+            ConstantInt *Id = dyn_cast<ConstantInt>(ValueId->getValue());
+            IdMap[BB] = Id->getZExtValue();
+        }
+    }
+}
+
 bool IDAssigner::runOnModule(Module &M) {
   IdentifierGenerator = make_unique<IDGenerator>();
 
 
   for (auto &F : M) {
-    std::set<IDAssigner::IdentifierType> cmpBbSet;
     IdMap[&F] = IdentifierGenerator->getUniqueIdentifier();
     for (Value &Arg : F.args()) {
       IdMap[&Arg] = IdentifierGenerator->getUniqueIdentifier();
     }
 
     for (auto &BB : F) {
-      IdMap[&BB] = IdentifierGenerator->getUniqueIdentifier();
+      collectBasicBlockId(&BB);
       for (auto &I : BB) {
         IdMap[&I] = IdentifierGenerator->getUniqueIdentifier();
       }
     }
+  }
 
+  for (auto &F : M) {
+    std::set<IDAssigner::IdentifierType> cmpBbSet;
     for (auto &BB : F) {
       const auto *TInst = BB.getTerminator();
       auto srcId = IdMap[&BB];
@@ -165,7 +178,9 @@ bool IDAssigner::runOnModule(Module &M) {
           auto dstId = IdMap[&*Succ];
           CfgEdges.insert({srcId, dstId});
       }
-      cmpBbSet.insert(srcId);
+      if(IdToAngoraMap[srcId] == 0) {
+        cmpBbSet.insert(srcId);
+      }
       for (auto &I : BB) {
           if (CallInst *callInst = dyn_cast<CallInst>(&I)) {
               if (Function *calledFunction = callInst->getCalledFunction()) {
@@ -195,12 +210,32 @@ bool IDAssigner::runOnModule(Module &M) {
                       // Store Angora CMP to BB id mapping
                       CmpMap[cmpId] = cmpBbSet;
                       cmpBbSet = std::set<IDAssigner::IdentifierType>();
+
+                      // Get the parent of this block (the original block contains the CMP
+                      if(IdMap[callInst->getParent()->getSinglePredecessor()] != 0) {
+                          BbIdToCmpId.insert(std::pair<IdentifierType, CmpIdType>(IdMap[callInst->getParent()->getSinglePredecessor()], cmpId));
+                      }
+                      // Parent of this block has no ID and is angora instrumentation
+                      // https://lists.llvm.org/pipermail/llvm-dev/2008-January/012238.html
+                      else {
+                          for (idf_iterator<BasicBlock*> I=idf_begin(callInst->getParent()->getSinglePredecessor()),
+                              E=idf_end(callInst->getParent()->getSinglePredecessor()); I != E; ++I) {
+                              BasicBlock* pred = *I;
+                              if(IdMap[pred] != 0) {
+                                  BbIdToCmpId.insert(std::pair<IdentifierType, CmpIdType>(IdMap[pred], cmpId));
+
+                                  // Trick the llvm-diff to look for predecessor cmpids when doing the diff
+                                  IdMap[callInst->getParent()->getSinglePredecessor()] = IdMap[pred];
+                                  CmpMap[cmpId] = CmpMap[IdToAngoraMap[IdMap[pred]]];
+                                  break;
+                              }
+                        }
+                    }
                   }
               }
           }
       }
     }
-
     collectCallSiteDominators(&F);
   }
 
@@ -386,6 +421,10 @@ const IDAssigner::CmpsCfg IDAssigner::getCmpCfg() const {
   return result;
 }
 
+const IDAssigner::BbCmpMap IDAssigner::getBBCmpMap() const {
+  return BbIdToCmpId;
+}
+
 // Stolen from AFLGo to be (somewhat) compatible with the same targets file
 // https://github.com/aflgo/aflgo/blob/master/llvm_mode/afl-llvm-pass.so.cc
 void IDAssigner::addCustomTargetsFromFile(const std::string Path, Module *M) {
@@ -518,7 +557,9 @@ void IDAssigner::emitCfgFile(const std::string Path) const {
   for (auto e : CfgEdges) {
     IdentifierType src,dst;
     std::tie(src,dst) = e;
-    InfoFile << formatv("{0},", (uint64_t)src) << formatv("{0}", (uint64_t)dst) << "\n";
+    if (src != 0 && dst != 0) {
+        InfoFile << formatv("{0},", (uint64_t)src) << formatv("{0}", (uint64_t)dst) << "\n";
+    }
   }
 }
 
@@ -534,7 +575,9 @@ void IDAssigner::emitCmpMapFile(const std::string Path) const {
   for (const auto &Iter : CmpMap) {
       for (const auto &E: Iter.second) {
           // Note: ParmeSan expects the id as a u32, not i32
-          InfoFile << formatv("{0},", (uint32_t)Iter.first) << formatv("{0}", (uint64_t)E) << "\n";
+          if (E != 0) {
+            InfoFile << formatv("{0},", (uint32_t)Iter.first) << formatv("{0}", (uint64_t)E) << "\n";
+          }
       }
   }
 }

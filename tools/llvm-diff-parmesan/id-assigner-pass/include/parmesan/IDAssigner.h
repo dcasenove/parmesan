@@ -6,6 +6,7 @@
 #include "llvm/Pass.h"
 #include "llvm/IR/Instruction.h"
 #include "llvm/ADT/SmallPtrSet.h"
+#include "llvm/ADT/DepthFirstIterator.h"
 
 #include <cstdint>
 #include <memory>
@@ -24,6 +25,7 @@ public:
   using CmpsCfg = std::set<std::tuple<CmpIdType, CmpIdType>>;
   using CallSiteDominators = std::map<CallSiteIdType, std::set<CmpIdType>>;
   using IdAngoraMap = std::map<IdentifierType, CmpIdType>;
+  using BbCmpMap = std::multimap<IdentifierType, CmpIdType>;
 
   static char ID;
   IDAssigner();
@@ -37,6 +39,7 @@ public:
   const CmpsMap &getCmpMap() const;
   const CmpsCfg getCmpCfg() const;
   const CallSiteDominators &getCallSiteDominators() const;
+  const BbCmpMap getBBCmpMap() const;
 
 private:
   class IDGenerator;
@@ -46,10 +49,12 @@ private:
   CmpsMap CmpMap;
   CallSiteDominators CallSiteDominatorsMap;
   IdAngoraMap IdToAngoraMap;
+  BbCmpMap BbIdToCmpId;
 
   void collectCallSiteDominators(llvm::Function *F);
   void collectPreviousIndirectBranch(llvm::Instruction *Inst, llvm::SmallPtrSet<llvm::Instruction *, 16> *Result, llvm::SmallPtrSet<llvm::Instruction *, 16> *Seen);
 
+  void collectBasicBlockId(llvm::BasicBlock *BB);
   CmpIdType getAngoraCmpIdForBB(llvm::BasicBlock *BB);
 
 

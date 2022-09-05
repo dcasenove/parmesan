@@ -11,9 +11,12 @@ fun:dfsan_infer_shape_in_math_op=discard
 
 fun:log10=functional
 fun:__ctype_toupper_loc=discard
+fun:__ctype_get_mb_cur_max=discard
 fun:isatty=discard
 fun:longjmp=discard
 fun:wait=discard
+
+fun:gmtime=functional
 
 ### libcxx
 fun:__atomic_fetch_add_4=uninstrumented
@@ -107,11 +110,13 @@ fun:toupper=functional
 fun:btowc=functional
 fun:exp=functional
 fun:exp2=functional
+fun:abs=functional
 fun:fabs=functional
 fun:finite=functional
 fun:floor=functional
 fun:fmod=functional
 fun:isinf=functional
+fun:__isinf=functional
 fun:isnan=functional
 fun:log=functional
 fun:modf=functional
@@ -160,6 +165,7 @@ fun:fputs=discard
 fun:fputs_unlocked=discard
 fun:fseek=discard
 fun:ftell=discard
+fun:ftello=discard
 fun:fwrite=discard
 fun:getenv=discard
 fun:getuid=discard

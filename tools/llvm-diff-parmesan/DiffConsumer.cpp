@@ -265,7 +265,7 @@ void DiffConsumer::printStats() {
 
 }
 
-void DiffConsumer::printStatsJson(raw_ostream &out) {
+void DiffConsumer::printStatsJson(raw_ostream &out, std::ifstream &src) {
   // Print BasicBlock IDs
   out << "{\n" << "\"targets\": [";
 
@@ -288,20 +288,35 @@ void DiffConsumer::printStatsJson(raw_ostream &out) {
     out << cmp;
   }
   out << "],\n";
-  out << "\"edges\": [";
 
+  // http://www.cplusplus.com/forum/general/90827/#msg488255
+  std::string line;
+  while( std::getline(src, line) ) out << line;
+  out << ",\n";
+
+  out << "\"id_mapping\": {";
   first = true;
-  for (auto e: IdAssigner->getCmpCfg()) {
+  auto e = IdAssigner->getBBCmpMap();
+  auto same_bb = e.equal_range(0);
+  for(auto i = e.begin(); i != e.end(); i = same_bb.second) {
       if (first) {
           first = false;
       } else {
         out << ", ";
       }
-      parmesan::IDAssigner::CmpIdType src,dst;
-      std::tie(src,dst) = e;
-      out << "[" << src << "," << dst << "]";
+      out << "\"" << i->first << "\"" << ": [";
+      same_bb = e.equal_range(i->first);
+      bool first_inner = true;
+      for (auto cmpid = same_bb.first; cmpid != same_bb.second; cmpid++) {
+        if (first_inner)
+            first_inner = false;
+        else
+            out << ", ";
+          out << cmpid->second;
+      }
+      out << "]";
   }
-  out << "],\n";
+  out << "},\n";
 
   // Print Call Site dominators
   parmesan::IDAssigner::CallSiteDominators CSD = IdAssigner->getCallSiteDominators();

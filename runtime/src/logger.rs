@@ -43,6 +43,10 @@ impl Logger {
         }
     }
 
+    pub fn save_ind(&mut self, indirect_edge: (u32, u32)) {
+        self.data.ind_edges.push(indirect_edge);
+    }
+
     // like the fn in fparser.rs
     pub fn get_order(&mut self, cond: &mut CondStmtBase) -> u32 {
         let order_key = (cond.cmpid, cond.context);

@@ -40,11 +40,15 @@ pub fn get_log_data_pin(out_f: &Path) -> io::Result<LogData> {
     let mut buffer = &buffer[..];
 
     let num_cond = read_struct::<u32, _>(&mut buffer)? as usize;
+    let num_ind = read_struct::<u32, _>(&mut buffer)? as usize;
     let num_tags = read_struct::<u32, _>(&mut buffer)? as usize;
     let num_mb = read_struct::<u32, _>(&mut buffer)? as usize;
 
     let cond_list = read_vector::<CondStmtBase, _>(&mut buffer, num_cond)?;
     debug!("cond_list({}): {:?}", num_cond, cond_list);
+
+    let ind_edges = read_vector::<(u32, u32), _>(&mut buffer, num_ind)?;
+    debug!("ind_edges({}): {:?}", num_ind, ind_edges);
 
     let mut tags_map = HashMap::new();
     for _ in 0..num_tags {
@@ -65,6 +69,7 @@ pub fn get_log_data_pin(out_f: &Path) -> io::Result<LogData> {
 
     Ok(LogData {
         cond_list,
+        ind_edges,
         tags: tags_map,
         magic_bytes: mb_map,
     })

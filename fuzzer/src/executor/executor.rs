@@ -9,6 +9,7 @@ use crate::{
 use angora_common::{config, defs, tag::TagSeg};
 
 use std::{
+    env,
     collections::HashMap,
     path::Path,
     process::{Command, Stdio},
@@ -71,6 +72,13 @@ impl Executor {
             defs::LD_LIBRARY_PATH_VAR.to_string(),
             cmd.ld_library.clone(),
         );
+        let dfsan_options = env::var(defs::DFSAN_OPTIONS_VAR);
+        if dfsan_options.is_ok() {
+            envs.insert(
+                defs::DFSAN_OPTIONS_VAR.to_string(),
+                dfsan_options.unwrap()
+            );
+        }
 
         let fd = pipe_fd::PipeFd::new(&cmd.out_file);
         let forksrv = Some(forksrv::Forksrv::new(
@@ -224,7 +232,7 @@ impl Executor {
                 unmem_status
             );
             // crash or hang
-            if self.branches.has_new(unmem_status, self.is_directed).0 {
+            if self.branches.has_new(unmem_status).0 {
                 self.depot.save(unmem_status, &buf, cmpid);
             }
         }
@@ -233,7 +241,7 @@ impl Executor {
 
     fn do_if_has_new(&mut self, buf: &Vec<u8>, status: StatusType, _explored: bool, cmpid: u32) {
         // new edge: one byte in bitmap
-        let (has_new_path, has_new_edge, edge_num) = self.branches.has_new(status, self.is_directed);
+        let (has_new_path, has_new_edge, edge_num) = self.branches.has_new(status);
 
         if has_new_path {
             self.has_new_path = true;
@@ -374,7 +382,7 @@ impl Executor {
             return vec![];
         }
 
-        let mut cond_list = track::load_track_data(
+        let (mut cond_list, ind_edges_list) = track::load_track_data(
             Path::new(&self.cmd.track_path),
             id as u32,
             speed,
@@ -385,11 +393,17 @@ impl Executor {
         let mut ind_dominator_offsets : HashMap<CmpId, Vec<TagSeg>> = HashMap::new();
         let mut ind_cond_list = vec![];
 
+        for t in ind_edges_list.clone().into_iter() {
+            debug!("BbId: {} to BBId: {}", t.0, t.1);
+            let edge = (t.0, t.1);
+            let mut dyncfg = self.depot.cfg.write().unwrap();
+            let _is_new = dyncfg.add_edge(t);
+            dyncfg.set_edge_indirect(t, t.0);
+        }
 
         for (a,b) in cond_list.clone().into_iter().tuple_windows() {
             let mut dyncfg = self.depot.cfg.write().unwrap();
             let edge = (a.base.cmpid, b.base.cmpid);
-            let _is_new = dyncfg.add_edge(edge);
 
             // Collect indirect call dominator taint
             if dyncfg.dominates_indirect_call(a.base.cmpid) {
@@ -400,9 +414,7 @@ impl Executor {
 
             debug!("VARIABLES: {:?}", a.variables);
             if b.base.last_callsite != 0 {
-                debug!("ADD Indirect edge {:?}: {}!!", edge, b.base.last_callsite);
-                dyncfg.set_edge_indirect(edge, b.base.last_callsite);
-                let dominators = 
+                let dominators =
                   dyncfg.get_callsite_dominators(b.base.last_callsite);
                 let mut fixed_offsets = vec![];
                 for d in dominators {
@@ -439,6 +451,12 @@ impl Executor {
 
         // Add fixed conds to result
         cond_list.append(&mut ind_cond_list);
+
+        // if fuzzer is directed mode, retain only if there is path to target
+        if self.is_directed {
+            let dyncfg = self.depot.cfg.read().unwrap();
+            cond_list.retain(|x| dyncfg.has_path_to_target(x.base.cmpid));
+        }
 
         self.local_stats.track_time += t_now.into();
         cond_list
